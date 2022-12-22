@@ -1,13 +1,18 @@
+# pyright: reportGeneralTypeIssues=false
+
 import discord
 import time
 import json
 from discord import app_commands
 from discord.ext import commands
-from common.dataio import get_tinydb_database, get_sqlite_database
+from common.dataio import get_sqlite_database
 from common.utils import pretty, fuzzy
 from typing import List, Optional
 from datetime import datetime
-import tabulate
+from tabulate import tabulate
+import logging
+
+logger = logging.getLogger('arcnero.Economy')
 
 DEFAULT_SETTINGS = [
     ('defaultBalance', 200),
@@ -30,7 +35,7 @@ class TransactionsHistoryView(discord.ui.View):
         self.cog = cog
         self.member = member
         
-        self.transactions = cog.get_all_member_transactions(member)
+        self.transactions = cog.get_member_transactions(member)
         self.current_page = 0
         self.pages : List[discord.Embed] = self.create_pages()
         
@@ -59,16 +64,16 @@ class TransactionsHistoryView(discord.ui.View):
             if len(tabl) < 20:
                 tabl.append((f"{trs.ftime} {trs.fdate}", f"{trs.delta:+}", f"{pretty.troncate_text(trs.message, 50)}"))
             else:
-                em = discord.Embed(color=0x2F3136, description=pretty.codeblock(tabulate(tabl, headers=("Date", "Transaction", "Message"))))
+                em = discord.Embed(color=0x2F3136, description=pretty.codeblock(tabulate(tabl, headers=("Date", "Delta", "Message"))))
                 em.set_author(name=f"Historique des transactions · {self.member}", icon_url=self.member.display_avatar.url)
-                em.set_footer(text=f"{len(self.transactions)} enregistrées dans les {TRANSACTION_EXPIRATION_DELAY / 86400} derniers jours")
+                em.set_footer(text=f"{len(self.transactions)} transactions enregistrées dans les {int(TRANSACTION_EXPIRATION_DELAY / 86400)} derniers jours")
                 embeds.append(em)
                 tabl = []
         
         if tabl:
-            em = discord.Embed(color=0x2F3136, description=pretty.codeblock(tabulate(tabl, headers=("Date", "Transaction", "Message"))))
+            em = discord.Embed(color=0x2F3136, description=pretty.codeblock(tabulate(tabl, headers=("Date", "Delta", "Message")))) 
             em.set_author(name=f"Historique des transactions · {self.member}", icon_url=self.member.display_avatar.url)
-            em.set_footer(text=f"{len(self.transactions)} enregistrées dans les {TRANSACTION_EXPIRATION_DELAY / 86400} derniers jours")
+            em.set_footer(text=f"{len(self.transactions)} transactions enregistrées dans les {int(TRANSACTION_EXPIRATION_DELAY / 86400)} derniers jours")
             embeds.append(em)
             
         return embeds
@@ -85,7 +90,7 @@ class TransactionsHistoryView(discord.ui.View):
     async def buttons_logic(self, interaction: discord.Interaction):
         self.previous.disabled = self.current_page == 0
         self.next.disabled = self.current_page + 1 >= len(self.pages)
-        await interaction.message.edit(view=self)
+        await interaction.message.edit(view=self) #type: ignore
         
     @discord.ui.button(label="Précédent", style=discord.ButtonStyle.secondary)
     async def previous(
@@ -113,47 +118,53 @@ class TransactionsHistoryView(discord.ui.View):
 class Account():
     def __init__(self, cog: 'Economy', member: discord.Member) -> None:
         self.cog = cog
-        self.member, self.guild = member, member.guild
+        self.member = member
+        self.guild = member.guild
         self.__initialize_account()
         
     def __eq__(self, o: object) -> bool:
         return self.member.id == o.member.id
     
     def __str__(self) -> str:
-        return f"{pretty.format_number(self._get_balance)}{self.cog.guild_currency(self.guild)}"
+        return f"{pretty.humanize_number(self._get_balance())}{self.cog.guild_currency(self.guild)}"
 
         
     def __initialize_account(self):
-        conn = get_sqlite_database('economy', 'g' + str(self.guild.id))
-        cursor = conn.cursor()
-        cursor.execute("INSERT OR IGNORE INTO accounts (member_id, balance) VALUES (?, ?)", (self.member.id, self.cog.get_guild_settings(self.guild.id)['defaultBalance']))
-        conn.commit()
-        cursor.close()
-        conn.close()
+        try:
+            conn = get_sqlite_database('economy', 'g' + str(self.guild.id))
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR IGNORE INTO accounts (member_id, balance) VALUES (?, ?)", (self.member.id, self.cog.get_guild_settings(self.guild)['defaultBalance']))
+            conn.commit()
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Erreur dans l'initialisation du compte : {e}", exc_info=True)
         
     # Balance --------------------------------------------
     def _get_balance(self) -> int:
-        conn = get_sqlite_database('economy', 'g' + str(self.member.guild.id))
+        conn = get_sqlite_database('economy', 'g' + str(self.guild.id))
         cursor = conn.cursor()
         cursor.execute("SELECT balance FROM accounts WHERE member_id=?", (self.member.id,))
         balance = cursor.fetchone()
         cursor.close()
         conn.close()
-        return balance
+        if balance:
+            return balance[0]
+        return 0
     
     def _set_balance(self, value: int, message: str, **extras) -> 'Transaction':
         current = self._get_balance()
         
         if value < 0:
             raise EconomyError.ForbiddenOperation("Impossible d'avoir un solde négatif")
-        conn = get_sqlite_database('economy', 'g' + str(self.member.guild.id))
+        conn = get_sqlite_database('economy', 'g' + str(self.guild.id))
         cursor = conn.cursor()
         cursor.execute("UPDATE accounts SET balance=? WHERE member_id=?", (value, self.member.id))
         conn.commit()
         cursor.close()
         conn.close()
         
-        return Transaction(self.cog, self, value - current, message, **extras)
+        return Transaction(self.cog, self, value - current, message, time.time(), **extras)
         
     @property
     def balance(self):
@@ -196,7 +207,7 @@ class Account():
         :param start: Timestamp depuis lequel calculer la variation du solde, par défaut toutes celles non-expirées
         :return: int 
         """
-        trs = self.cog.get_all_member_transactions(self.member, since)
+        trs = self.cog.get_member_transactions(self.member, since)
         return sum((i.delta for i in trs))
     
     # Utils --------------------------------
@@ -205,7 +216,7 @@ class Account():
 
         :return: discord.Embed
         """
-        em = discord.Embed(title=f"*{self.member.display_name}*", color=0x2F3136)
+        em = discord.Embed(title=f"Compte Bancaire · *{self.member.display_name}*", color=0x2F3136)
         em.add_field(name="Solde", value=pretty.codeblock(self.__str__()))
         
         balance_var = self.balance_variation(time.time() - 86400) # 1 jour
@@ -218,7 +229,7 @@ class Account():
         except:
             em.add_field(name="Rang", value=pretty.codeblock(f"#{len(lb) + 1}"))
         
-        trs = self.cog.get_all_member_transactions(self.member)
+        trs = self.cog.get_member_transactions(self.member)
         if trs:
             txt = '\n'.join([f'{t.delta:+} · {pretty.troncate_text(t.message, 50)}' for t in trs][::-1][:5])
             em.add_field(name="Dernières transactions", value=pretty.codeblock(txt), inline=False)
@@ -228,13 +239,13 @@ class Account():
     
     
 class Transaction():
-    def __init__(self, cog: 'Economy', account: Account, delta: int, message: str, **extras) -> None:
+    def __init__(self, cog: 'Economy', account: Account, delta: int, message: str, timestamp: float, **extras) -> None:
         self.cog = cog
         self.account = account
         self.delta = delta
         self.message = message
+        self.timestamp = timestamp
         self.extras : dict = extras
-        self.timestamp : float = time.time()
         
         self.id : str = self.__generate_transaction_id()
         
@@ -253,7 +264,7 @@ class Transaction():
 
         :return: str
         """
-        return datetime.now().fromtimestamp(self.timestamp).strftime('%d/%m/%Y')
+        return datetime.utcfromtimestamp(self.timestamp).strftime('%d/%m/%Y')
 
     @property
     def ftime(self) -> str:
@@ -261,11 +272,11 @@ class Transaction():
 
         :return: str
         """
-        return datetime.now().fromtimestamp(self.timestamp).strftime('%H:%M')
+        return datetime.utcfromtimestamp(self.timestamp).strftime('%H:%M')
     
     def save(self):
         """Sauvegarder la transaction dans la base de données"""
-        conn = get_sqlite_database('economy', 'g' + str(self.guild.id))
+        conn = get_sqlite_database('economy', 'g' + str(self.account.guild.id))
         cursor = conn.cursor()
         cursor.execute("INSERT OR REPLACE INTO transactions (id, timestamp, delta, message, member_id, extras) VALUES (?, ?, ?, ?, ?, ?)", 
                        (self.id, self.timestamp, self.delta, self.message, self.account.member.id, json.dumps(self.extras)))
@@ -283,8 +294,8 @@ class Transaction():
         if not guild.get_member(data['member_id']):
             raise ValueError(f"Impossible d'obtenir le membre USER_ID={data['member_id']}")
         
-        account = Account(guild.get_member(data['member_id']))
-        return cls(cog, account, data['delta'], data['message'], **data['extras'])
+        account = Account(cog, guild.get_member(data['member_id']))
+        return cls(cog, account, data['delta'], data['message'], data['timestamp'], **data['extras'])
     
 
 class Economy(commands.Cog):
@@ -313,10 +324,10 @@ class Economy(commands.Cog):
             
             cursor.execute("CREATE TABLE IF NOT EXISTS settings (setting_name TINYTEXT PRIMARY KEY, value TEXT)")
             for name, default_value in DEFAULT_SETTINGS:
-                cursor.execute("INSERT OR IGNORE INTO settings (setting_name, value) VALUES (?, ?)", (name, default_value))
-        conn.commit()
-        cursor.close()
-        conn.close()
+                cursor.execute("INSERT OR IGNORE INTO settings (setting_name, value) VALUES (?, ?)", (name, json.dumps(default_value)))
+            conn.commit()
+            cursor.close()
+            conn.close()
     
     
     def get_account(self, member: discord.Member) -> Account:
@@ -339,7 +350,10 @@ class Economy(commands.Cog):
         accounts = cursor.fetchall()
         cursor.close()
         conn.close()
-        return {accounts[0]: accounts[1]}
+        if accounts:
+            return {a[0]: a[1] for a in accounts}
+        else:
+            return {}
         
         
     def get_guild_settings(self, guild: discord.Guild) -> dict:
@@ -354,7 +368,7 @@ class Economy(commands.Cog):
         settings = cursor.fetchall()
         cursor.close()
         conn.close()
-        return {settings[0] : json.loads(settings[1])}
+        return {s[0] : json.loads(s[1]) for s in settings}
     
     def set_guild_settings(self, guild: discord.Guild, update: dict):
         """Met à jours les paramètres du serveur
@@ -365,7 +379,7 @@ class Economy(commands.Cog):
         conn = get_sqlite_database('economy', 'g' + str(guild.id))
         cursor = conn.cursor()
         for upd in update:
-            cursor.execute("UPDATE settings SET value=? WHERE setting_name=?", (json.dumps(update[upd]), upd))
+            cursor.execute("UPDATE settings SET value=? WHERE setting_name=?", (json.dumps(update[upd], ensure_ascii=False), upd))
         conn.commit()
         cursor.close()
         conn.close()
@@ -418,9 +432,9 @@ class Economy(commands.Cog):
         :return: Transaction
         """
         account = self.get_account(member)
-        return Transaction(self, account, amount, message, extras)
+        return Transaction(self, account, amount, message, time.time(), extras)
     
-    def get_all_guild_transactions(self, guild: discord.Guild, since: float = 0.0) -> List[Transaction]:
+    def get_guild_transactions(self, guild: discord.Guild, since: float = 0.0) -> List[Transaction]:
         """Récupère toutes les transactions non-expirées réalisées sur le serveur
 
         :param guild: Serveur des transactions
@@ -433,16 +447,16 @@ class Economy(commands.Cog):
         data = cursor.fetchall()
         cursor.close()
         conn.close()
-        data = [{'id': t[0], 'timestamp': t[1], 'delta': t[2], 'message': t[3], 'member_id': t[4], 'extras': json.loads(t[5])}]
+        data = [{'id': i[0], 'timestamp': i[1], 'delta': i[2], 'message': i[3], 'member_id': i[4], 'extras': json.loads(i[5])} for i in data]
         
         transactions = []
         for t in data:
             if not guild.get_member(t['member_id']):
                 continue
             transactions.append(Transaction.load(self, guild, t))
-        return data
+        return transactions
     
-    def get_all_member_transactions(self, member: discord.Member, since: float = 0.0) -> List[Transaction]:
+    def get_member_transactions(self, member: discord.Member, since: float = 0.0) -> List[Transaction]:
         """Récupère toutes les transactions non-expirées réalisées par un membre
 
         :param member: Membre responsable des transactions
@@ -455,12 +469,12 @@ class Economy(commands.Cog):
         data = cursor.fetchall()
         cursor.close()
         conn.close()
-        data = [{'id': t[0], 'timestamp': t[1], 'delta': t[2], 'message': t[3], 'member_id': t[4], 'extras': json.loads(t[5])}]
+        data = [{'id': i[0], 'timestamp': i[1], 'delta': i[2], 'message': i[3], 'member_id': i[4], 'extras': json.loads(i[5])} for i in data]
         
         transactions = []
         for t in data:
             transactions.append(Transaction.load(self, member.guild, t))
-        return data
+        return transactions
     
     def get_transaction(self, guild: discord.Guild, transaction_id: str) -> Transaction:
         """Récupère un objet Transaction à partir de son identifiant unique
@@ -469,7 +483,7 @@ class Economy(commands.Cog):
         :param transaction_id: Identifiant unique de la transaction
         :return: Transaction ou None si aucune transaction n'a été trouvée
         """
-        transactions = self.get_all_guild_transactions(guild)
+        transactions = self.get_guild_transactions(guild)
         for t in transactions:
             if t.id == transaction_id:
                 return t
@@ -532,6 +546,9 @@ class Economy(commands.Cog):
         """
         receiver = self.get_account(member)
         sender = self.get_account(interaction.user)
+        if receiver == sender:
+            return await interaction.response.send_message(f"**Erreur ·** Vous ne pouvez pas vous transférer de l'argent à vous-même !", ephemeral=True)
+        
         currency = self.guild_currency(interaction.guild)
         try:
             sender_trs = sender.withdraw_credits(amount, f'Transfert à {receiver.member}')
@@ -562,12 +579,12 @@ class Economy(commands.Cog):
             rank += 1
         if not chunks:
             return await interaction.response.send_message(f"**Erreur ·** Il m'est impossible de générer un leaderboard sur ce serveur", ephemeral=True)
-        em = discord.Embed(color=0x2F3136, title=f"**Leaderboard** · {interaction.guild.name}", description=pretty.codeblock(tabulate(chunks, headers=('#', 'Membre', 'Solde'))))
+        em = discord.Embed(color=0x2F3136, title=f"**Leaderboard** · {interaction.guild.name}", description=pretty.codeblock(tabulate(chunks, headers=('#', 'Membre', 'Solde')))) #type:ignore
         em.set_footer(text=f"Crédits en circulation : {pretty.humanize_number(self.guild_total_credits())}{currency}")
         await interaction.response.send_message(embed=em)
         
         
-    @app_commands.command(name="bank")
+    @app_commands.command(name="bankset")
     @app_commands.guild_only
     @app_commands.checks.has_permissions(manage_messages=True)
     async def set_bank_settings(self, interaction: discord.Interaction, setting: str, value: str):
@@ -579,15 +596,17 @@ class Economy(commands.Cog):
         if setting not in [s[0] for s in DEFAULT_SETTINGS]:
             return await interaction.response.send_message(f"**Erreur ·** Le paramètre `{setting}` n'existe pas", ephemeral=True)
         try:
-            await self.set_guild_settings(interaction.guild, {setting: value})
-        except:
+            self.set_guild_settings(interaction.guild, {setting: value})
+        except Exception as e:
+            logger.error(f"Erreur dans set_bank_settings : {e}", exc_info=True)
             return await interaction.response.send_message(f"**Erreur ·** Il y a eu une erreur lors du réglage du paramètre, remontez cette erreur au propriétaire du bot", ephemeral=True)
         await interaction.response.send_message(f"**Succès ·** Le paramètre `{setting}` a été réglé sur `{value}`", ephemeral=True)
         
     @set_bank_settings.autocomplete('setting')
     async def autocomplete_callback(self, interaction: discord.Interaction, current: str):
-        stgs = fuzzy.finder(current, DEFAULT_SETTINGS, key=lambda ds: ds[0])
-        return [app_commands.Choice(name=s[0], value=s[0]) for s in stgs]
+        banksettings = tuple(self.get_guild_settings(interaction.guild).items())
+        stgs = fuzzy.finder(current, banksettings, key=lambda bs: bs[0])
+        return [app_commands.Choice(name=f'{s[0]} ({s[1]})', value=s[0]) for s in stgs]
     
     @app_commands.command(name="setbalance")
     @app_commands.guild_only
