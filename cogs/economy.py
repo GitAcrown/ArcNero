@@ -542,6 +542,7 @@ class Economy(commands.Cog):
         """Réaliser un transfert d'argent à un membre
 
         :param member: Receveur du transfert
+        :param amount: Nombre de crédits à transférer
         :param message: Message qui sera lié à la transaction
         """
         receiver = self.get_account(member)
@@ -565,7 +566,7 @@ class Economy(commands.Cog):
     
     @app_commands.command(name='leaderboard')
     @app_commands.guild_only
-    async def show_guild_leaderboard(self, interaction: discord.Interaction, top: app_commands.Range[int, 0, 50] = 10):
+    async def show_guild_leaderboard(self, interaction: discord.Interaction, top: app_commands.Range[int, 1, 50] = 10):
         """Affiche un leaderboard des comptes bancaires du serveur
 
         :param top: Nombre de membres à afficher, par défaut 10 (max. 50)
@@ -579,8 +580,8 @@ class Economy(commands.Cog):
             rank += 1
         if not chunks:
             return await interaction.response.send_message(f"**Erreur ·** Il m'est impossible de générer un leaderboard sur ce serveur", ephemeral=True)
-        em = discord.Embed(color=0x2F3136, title=f"**Leaderboard** · {interaction.guild.name}", description=pretty.codeblock(tabulate(chunks, headers=('#', 'Membre', 'Solde')))) #type:ignore
-        em.set_footer(text=f"Crédits en circulation : {pretty.humanize_number(self.guild_total_credits())}{currency}")
+        em = discord.Embed(color=0x2F3136, title=f"**Leaderboard** · {interaction.guild.name}", description=pretty.codeblock(tabulate(chunks, headers=('#', 'Membre', 'Solde')), lang='css'))
+        em.set_footer(text=f"Crédits en circulation : {pretty.humanize_number(self.guild_total_credits(interaction.guild))}{currency}")
         await interaction.response.send_message(embed=em)
         
         
