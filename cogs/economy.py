@@ -224,7 +224,7 @@ class Account():
         
         lb = self.cog.guild_leaderboard(self.guild)
         try:
-            lb_rank = lb.index(Account) + 1
+            lb_rank = lb.index(self) + 1
             em.add_field(name="Rang", value=pretty.codeblock(f"#{lb_rank}"))
         except:
             em.add_field(name="Rang", value=pretty.codeblock(f"#{len(lb) + 1}"))
@@ -580,7 +580,7 @@ class Economy(commands.Cog):
             rank += 1
         if not chunks:
             return await interaction.response.send_message(f"**Erreur ·** Il m'est impossible de générer un leaderboard sur ce serveur", ephemeral=True)
-        em = discord.Embed(color=0x2F3136, title=f"**Leaderboard** · {interaction.guild.name}", description=pretty.codeblock(tabulate(chunks, headers=('#', 'Membre', 'Solde')), lang='css'))
+        em = discord.Embed(color=0x2F3136, title=f"**Leaderboard** · {interaction.guild.name}", description=pretty.codeblock(tabulate(chunks, headers=('#', 'Membre', 'Solde')), lang='css')) #type: ignore
         em.set_footer(text=f"Crédits en circulation : {pretty.humanize_number(self.guild_total_credits(interaction.guild))}{currency}")
         await interaction.response.send_message(embed=em)
         
