@@ -264,7 +264,7 @@ class Transaction():
 
         :return: str
         """
-        return datetime.utcfromtimestamp(self.timestamp).strftime('%d/%m/%Y')
+        return datetime.now().fromtimestamp(self.timestamp).strftime('%d/%m/%Y')
 
     @property
     def ftime(self) -> str:
@@ -272,7 +272,7 @@ class Transaction():
 
         :return: str
         """
-        return datetime.utcfromtimestamp(self.timestamp).strftime('%H:%M')
+        return datetime.now().fromtimestamp(self.timestamp).strftime('%H:%M')
     
     def save(self):
         """Sauvegarder la transaction dans la base de données"""
