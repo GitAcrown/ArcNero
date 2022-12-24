@@ -642,15 +642,17 @@ class Economy(commands.Cog):
         
         if account.balance >= settings['limitAllowance']:
             return await interaction.response.send_message(f"**Allocation non versée ·** Votre solde est au delà de la limite imposée par la banque ({pretty.humanize_number(settings['limitAllowance'])}{currency}).", ephemeral=True)
-        
-        if self.check_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', lambda x: x == today):
-            return await interaction.response.send_message(f"**Allocation non versée ·** Vous avez déjà perçu votre allocation pour aujourd'hui.", ephemeral=True)
-        
-        trs = account.deposit_credits(settings['dailyAllowance'], "Allocation d'aide journalière")
-        trs.save()
-        self.set_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', today)
-        await interaction.response.send_message(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(settings['dailyAllowance'])}{currency}**\nVous avez désormais {account}", ephemeral=True)
+        try:
+            if self.check_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', lambda x: x == today):
+                return await interaction.response.send_message(f"**Allocation non versée ·** Vous avez déjà perçu votre allocation pour aujourd'hui.", ephemeral=True)
             
+            trs = account.deposit_credits(settings['dailyAllowance'], "Allocation d'aide journalière")
+            trs.save()
+            self.set_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', today)
+            await interaction.response.send_message(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(settings['dailyAllowance'])}{currency}**\nVous avez désormais {account}", ephemeral=True)
+        except Exception as e:
+            logger.error(e, exc_info=True)
+                
     @app_commands.command(name='leaderboard')
     @app_commands.guild_only
     async def show_guild_leaderboard(self, interaction: discord.Interaction, top: app_commands.Range[int, 1, 50] = 10):
