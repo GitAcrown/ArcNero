@@ -63,10 +63,10 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
             credits = 0
             wintxt = ''
         
-        txt = f"{columns[0][0]}|{columns[1][0]}|{columns[2][0]}\n"
-        txt += f"{columns[0][1]}|{columns[1][1]}|{columns[2][1]}«\n"
-        txt += f"{columns[0][2]}|{columns[1][2]}|{columns[2][2]}"
-        em = discord.Embed(color=0x2F3136, description=pretty.codeblock(txt))
+        txt = f"┇{columns[0][0]}┋{columns[1][0]}┋{columns[2][0]}┇\n"
+        txt += f"▸{columns[0][1]}▪{columns[1][1]}▪{columns[2][1]}◂\n"
+        txt += f"┇{columns[0][2]}┋{columns[1][2]}┋{columns[2][2]}┇"
+        em = discord.Embed(color=0x2F3136, description=pretty.codeblock(txt, 'fix'), title=f'**Machine à sous** | `Mise : {bet}{currency}`')
         if credits:
             em.set_footer(text=f"{wintxt}\nVous gagnez {pretty.humanize_number(credits)}{currency}")
             trs = account.deposit_credits(credits, "Gain à la machine à sous")
