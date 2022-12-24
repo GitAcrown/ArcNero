@@ -512,7 +512,7 @@ class Economy(commands.Cog):
         self.last_cleanup = time.time()
 
     
-    def set_rule(self, guild: discord.Guild, check_id: str, value: str, replace: bool = True):
+    def set_rule(self, guild: discord.Guild, check_id: str, value: str):
         """Ajouter une règle personnalisée
 
         :param guild: Serveur de la règle
@@ -521,10 +521,7 @@ class Economy(commands.Cog):
         """
         conn = get_sqlite_database('economy', 'g' + str(guild.id))
         cursor = conn.cursor()
-        if replace:
-            cursor.execute("INSERT OR REPLACE INTO rules (id, value) VALUES (?, ?)", (check_id, value))
-        else:
-            cursor.execute("INSERT OR IGNORE INTO rules (id, value) VALUES (?, ?)", (check_id, value))
+        cursor.execute("INSERT OR REPLACE INTO rules (id, value) VALUES (?, ?)", (check_id, value))
         conn.commit()
         cursor.close()
         conn.close()
