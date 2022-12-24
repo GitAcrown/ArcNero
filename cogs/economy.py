@@ -5,7 +5,8 @@ import time
 import json
 from discord import app_commands
 from discord.ext import commands
-from common.dataio import get_sqlite_database
+from common.dataio import get_sqlite_database, get_tinydb_database
+from tinydb import TinyDB, Query
 from common.utils import pretty, fuzzy
 from typing import List, Optional
 from datetime import datetime
@@ -16,7 +17,9 @@ logger = logging.getLogger('arcnero.Economy')
 
 DEFAULT_SETTINGS = [
     ('defaultBalance', 200),
-    ('stringCurrency', '✦')
+    ('stringCurrency', '✦'),
+    ('dailyAllowance', 100),
+    ('limitAllowance', 1000)
 ]
 TRANSACTION_EXPIRATION_DELAY = 604800 # 7 jours
 TRANSACTIONS_CLEANUP_DELAY = 3600 # 1 heure
@@ -564,6 +567,30 @@ class Economy(commands.Cog):
             receiver_trs.save()
             await interaction.response.send_message(f"**Transfert réalisé ·** {member.mention} a reçu {pretty.humanize_number(amount)}{currency} de votre part.")
     
+    @app_commands.command(name='daily')
+    @app_commands.guild_only
+    async def get_daily_income(self, interaction: discord.Interaction):
+        """Récupérer son allocation journalière définie par la banque (pour les membres les plus précaires)"""
+        settings = self.get_guild_settings(interaction.guild)
+        account = self.get_account(interaction.user)
+        currency = self.guild_currency(interaction.guild)
+        if account.balance >= settings['limitAllowance']:
+            return await interaction.response.send_message(f"**Allocation non versée ·** Votre solde est au delà de la limite imposée par la banque ({pretty.humanize_number(settings['limitAllowance'])}{currency}).", ephemeral=True)
+
+        today = datetime.now().strftime('%d/%m/%Y')
+        db = get_tinydb_database('economy', 'cooldowns')
+        db = db.table(str(interaction.guild.id))
+        User = Query()
+        cooldown = db.get(User.uid == interaction.user.id)
+        if cooldown:
+            if cooldown['last_daily'] == today:
+                return await interaction.response.send_message(f"**Allocation non versée ·** Vous avez déjà perçu votre allocation pour aujourd'hui.", ephemeral=True)
+        
+        trs = account.deposit_credits(settings['dailyAllowance'], "Allocation d'aide journalière")
+        trs.save()
+        db.upsert({'uid': interaction.user.id, 'last_daily': today}, User.uid == interaction.user.id)
+        await interaction.response.send_message(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(settings['dailyAllowance'])}{currency}**\nVous avez désormais {account}", ephemeral=True)
+        
     @app_commands.command(name='leaderboard')
     @app_commands.guild_only
     async def show_guild_leaderboard(self, interaction: discord.Interaction, top: app_commands.Range[int, 1, 50] = 10):
