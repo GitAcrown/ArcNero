@@ -635,6 +635,7 @@ class Economy(commands.Cog):
     @app_commands.guild_only
     async def get_daily_allowance(self, interaction: discord.Interaction):
         """Récupérer son allocation journalière définie par la banque (pour les membres les plus précaires)"""
+        await interaction.response.defer()
         try:
             settings = self.get_guild_settings(interaction.guild)
             account = self.get_account(interaction.user)
@@ -642,15 +643,15 @@ class Economy(commands.Cog):
             today = datetime.now().strftime('%d/%m/%Y')
             
             if account.balance >= settings['limitAllowance']:
-                return await interaction.response.send_message(f"**Allocation non versée ·** Votre solde est au delà de la limite imposée par la banque ({pretty.humanize_number(settings['limitAllowance'])}{currency}).", ephemeral=True)
+                return await interaction.followup.send(f"**Allocation non versée ·** Votre solde est au delà de la limite imposée par la banque ({pretty.humanize_number(settings['limitAllowance'])}{currency}).", ephemeral=True)
             
             if self.check_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', lambda x: x == today):
-                return await interaction.response.send_message(f"**Allocation non versée ·** Vous avez déjà perçu votre allocation pour aujourd'hui.", ephemeral=True)
+                return await interaction.followup.send(f"**Allocation non versée ·** Vous avez déjà perçu votre allocation pour aujourd'hui.", ephemeral=True)
             
             trs = account.deposit_credits(settings['dailyAllowance'], "Allocation d'aide journalière")
             trs.save()
             self.set_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', today)
-            await interaction.response.send_message(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(settings['dailyAllowance'])}{currency}**\nVous avez désormais {account}", ephemeral=True)
+            await interaction.followup.send(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(settings['dailyAllowance'])}{currency}**\nVous avez désormais {account}", ephemeral=True)
         except Exception as e:
             logger.debug(e, exc_info=True)
             
