@@ -5,15 +5,17 @@ import time
 import json
 from discord import app_commands
 from discord.ext import commands
-from common.dataio import get_sqlite_database, get_tinydb_database
-from tinydb import TinyDB, Query
+from common.dataio import get_sqlite_database
 from common.utils import pretty, fuzzy
-from typing import List, Optional
+from typing import List, Optional, Callable
 from datetime import datetime
 from tabulate import tabulate
+from collections import namedtuple
 import logging
 
 logger = logging.getLogger('arcnero.Economy')
+
+Rule = namedtuple('Rule', ('id', 'value'))
 
 DEFAULT_SETTINGS = [
     ('defaultBalance', 200),
@@ -63,7 +65,7 @@ class TransactionsHistoryView(discord.ui.View):
     def create_pages(self):
         embeds = []
         tabl = []
-        for trs in self.transactions[::-1]:
+        for trs in self.transactions:
             if len(tabl) < 20:
                 tabl.append((f"{trs.ftime} {trs.fdate}", f"{trs.delta:+}", f"{pretty.troncate_text(trs.message, 50)}"))
             else:
@@ -234,7 +236,7 @@ class Account():
         
         trs = self.cog.get_member_transactions(self.member)
         if trs:
-            txt = '\n'.join([f'{t.delta:+} · {pretty.troncate_text(t.message, 50)}' for t in trs][::-1][:5])
+            txt = '\n'.join([f'{t.delta:+} · {pretty.troncate_text(t.message, 50)}' for t in trs][:5])
             em.add_field(name="Dernières transactions", value=pretty.codeblock(txt), inline=False)
         
         em.set_thumbnail(url=self.member.display_avatar.url)
@@ -324,6 +326,7 @@ class Economy(commands.Cog):
             cursor = conn.cursor()
             cursor.execute("CREATE TABLE IF NOT EXISTS accounts (member_id INTEGER PRIMARY KEY, balance INTEGER CHECK (balance >= 0))")
             cursor.execute("CREATE TABLE IF NOT EXISTS transactions (id TINYTEXT PRIMARY KEY, timestamp INTEGER, delta INTEGER, message TEXT, member_id INTEGER, extras MEDIUMTEXT, FOREIGN KEY (member_id) REFERENCES accounts(member_id))")
+            cursor.execute("CREATE TABLE IF NOT EXISTS rules (id TINYTEXT PRIMARY KEY, value TEXT)")
             
             cursor.execute("CREATE TABLE IF NOT EXISTS settings (setting_name TINYTEXT PRIMARY KEY, value TEXT)")
             for name, default_value in DEFAULT_SETTINGS:
@@ -438,7 +441,7 @@ class Economy(commands.Cog):
         return Transaction(self, account, amount, message, time.time(), extras)
     
     def get_guild_transactions(self, guild: discord.Guild, since: float = 0.0) -> List[Transaction]:
-        """Récupère toutes les transactions non-expirées réalisées sur le serveur
+        """Récupère toutes les transactions non-expirées réalisées sur le serveur dans l'ordre décroissant des timestamps
 
         :param guild: Serveur des transactions
         :param since: Timestamp minimal de l'échantillon à récupérer (par défaut, 0.0)
@@ -446,7 +449,7 @@ class Economy(commands.Cog):
         """
         conn = get_sqlite_database('economy', 'g' + str(guild.id))
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM transactions WHERE timestamp >=?", (since,))
+        cursor.execute("SELECT * FROM transactions WHERE timestamp >=? ORDER BY timestamp DESC", (since,))
         data = cursor.fetchall()
         cursor.close()
         conn.close()
@@ -460,7 +463,7 @@ class Economy(commands.Cog):
         return transactions
     
     def get_member_transactions(self, member: discord.Member, since: float = 0.0) -> List[Transaction]:
-        """Récupère toutes les transactions non-expirées réalisées par un membre
+        """Récupère toutes les transactions non-expirées réalisées par un membre dans l'ordre décroissant des timestamps
 
         :param member: Membre responsable des transactions
         :param since: Timestamp minimal de l'échantillon à récupérer (par défaut, 0.0)
@@ -468,7 +471,7 @@ class Economy(commands.Cog):
         """
         conn = get_sqlite_database('economy', 'g' + str(member.guild.id))
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM transactions WHERE member_id=? AND timestamp >=?", (member.id, since))
+        cursor.execute("SELECT * FROM transactions WHERE member_id=? AND timestamp >=? ORDER BY timestamp DESC", (member.id, since))
         data = cursor.fetchall()
         cursor.close()
         conn.close()
@@ -507,6 +510,67 @@ class Economy(commands.Cog):
         cursor.close()
         conn.close()
         self.last_cleanup = time.time()
+
+    
+    def set_rule(self, guild: discord.Guild, check_id: str, value: str, replace: bool = True):
+        """Ajouter une règle personnalisée
+
+        :param guild: Serveur de la règle
+        :param check_id: Identifiant unique de la règle
+        :param value: Valeur de la règle (utilisée pour l'exécution)
+        """
+        conn = get_sqlite_database('economy', 'g' + str(guild.id))
+        cursor = conn.cursor()
+        if replace:
+            cursor.execute("INSERT OR REPLACE INTO rules (id, value) VALUES (?, ?)", (check_id, value))
+        else:
+            cursor.execute("INSERT OR IGNORE INTO rules (id, value) VALUES (?, ?)", (check_id, value))
+        conn.commit()
+        cursor.close()
+        conn.close()
+    
+    def get_rule(self, guild: discord.Guild, check_id: str) -> Rule:
+        """Renvoie un objet contenant les données de la règle personnalisée
+
+        :param guild: Serveur de la règle
+        :param check_id: Identifiant unique de la règle
+        :return: namedtuple.Rule['id', 'type', 'value']
+        """
+        conn = get_sqlite_database('economy', 'g' + str(guild.id))
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM rules WHERE id=?", (check_id,))
+        data = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if data:
+            return Rule(*data)
+        return None
+    
+    def check_rule(self, guild: discord.Guild, check_id: str, func: Callable[[str], bool]) -> bool:
+        """Vérifier la règle personnalisée
+
+        :param guild: Serveur de la règle
+        :param check_id: Identifiant unique de la règle
+        :param func: Fonction qui doit prendre un paramètre 'value'[str] et renvoyer un bool
+        :return: bool
+        """
+        check = self.get_rule(guild, check_id)
+        if check:
+            return func(check.value)
+        return False
+    
+    def delete_rule(self, guild: discord.Guild, check_id: str):
+        """Supprimer la règle personnalisée
+
+        :param guild: Serveur de la règle
+        :param check_id: Identifiant unique de la règle
+        """
+        conn = get_sqlite_database('economy', 'g' + str(guild.id))
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM rules WHERE id=?", (check_id,))
+        conn.commit()
+        cursor.close()
+        conn.close()
 
 
     # COMMANDES ======================================================================
@@ -569,26 +633,22 @@ class Economy(commands.Cog):
     
     @app_commands.command(name='daily')
     @app_commands.guild_only
-    async def get_daily_income(self, interaction: discord.Interaction):
+    async def get_daily_allowance(self, interaction: discord.Interaction):
         """Récupérer son allocation journalière définie par la banque (pour les membres les plus précaires)"""
         settings = self.get_guild_settings(interaction.guild)
         account = self.get_account(interaction.user)
         currency = self.guild_currency(interaction.guild)
+        today = datetime.now().strftime('%d/%m/%Y')
+        
         if account.balance >= settings['limitAllowance']:
             return await interaction.response.send_message(f"**Allocation non versée ·** Votre solde est au delà de la limite imposée par la banque ({pretty.humanize_number(settings['limitAllowance'])}{currency}).", ephemeral=True)
-
-        today = datetime.now().strftime('%d/%m/%Y')
-        db = get_tinydb_database('economy', 'cooldowns')
-        db = db.table(str(interaction.guild.id))
-        User = Query()
-        cooldown = db.get(User.uid == interaction.user.id)
-        if cooldown:
-            if cooldown['last_daily'] == today:
-                return await interaction.response.send_message(f"**Allocation non versée ·** Vous avez déjà perçu votre allocation pour aujourd'hui.", ephemeral=True)
+        
+        if self.check_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', lambda x: x == today):
+            return await interaction.response.send_message(f"**Allocation non versée ·** Vous avez déjà perçu votre allocation pour aujourd'hui.", ephemeral=True)
         
         trs = account.deposit_credits(settings['dailyAllowance'], "Allocation d'aide journalière")
         trs.save()
-        db.upsert({'uid': interaction.user.id, 'last_daily': today}, User.uid == interaction.user.id)
+        self.set_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', today)
         await interaction.response.send_message(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(settings['dailyAllowance'])}{currency}**\nVous avez désormais {account}", ephemeral=True)
         
     @app_commands.command(name='leaderboard')
