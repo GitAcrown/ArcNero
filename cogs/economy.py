@@ -519,12 +519,15 @@ class Economy(commands.Cog):
         :param check_id: Identifiant unique de la règle
         :param value: Valeur de la règle (utilisée pour l'exécution)
         """
-        conn = get_sqlite_database('economy', 'g' + str(guild.id))
-        cursor = conn.cursor()
-        cursor.execute("INSERT OR REPLACE INTO rules (id, value) VALUES (?, ?)", (check_id, value))
-        conn.commit()
-        cursor.close()
-        conn.close()
+        try:
+            conn = get_sqlite_database('economy', 'g' + str(guild.id))
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR REPLACE INTO rules (id, value) VALUES (?, ?)", (check_id, value))
+            conn.commit()
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            logger.error(e, exc_info=True)
     
     def get_rule(self, guild: discord.Guild, check_id: str) -> Rule:
         """Renvoie un objet contenant les données de la règle personnalisée
