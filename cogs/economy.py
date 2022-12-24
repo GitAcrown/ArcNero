@@ -385,7 +385,7 @@ class Economy(commands.Cog):
         conn = get_sqlite_database('economy', 'g' + str(guild.id))
         cursor = conn.cursor()
         for upd in update:
-            cursor.execute("UPDATE settings SET value=? WHERE setting_name=?", (json.dumps(update[upd], ensure_ascii=False), upd))
+            cursor.execute("UPDATE settings SET value=? WHERE setting_name=?", (json.dumps(update[upd]), upd))
         conn.commit()
         cursor.close()
         conn.close()
@@ -519,15 +519,12 @@ class Economy(commands.Cog):
         :param check_id: Identifiant unique de la règle
         :param value: Valeur de la règle (utilisée pour l'exécution)
         """
-        try:
-            conn = get_sqlite_database('economy', 'g' + str(guild.id))
-            cursor = conn.cursor()
-            cursor.execute("INSERT OR REPLACE INTO rules (id, value) VALUES (?, ?)", (check_id, value))
-            conn.commit()
-            cursor.close()
-            conn.close()
-        except Exception as e:
-            logger.error(e, exc_info=True)
+        conn = get_sqlite_database('economy', 'g' + str(guild.id))
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO rules (id, value) VALUES (?, ?)", (check_id, value))
+        conn.commit()
+        cursor.close()
+        conn.close()
     
     def get_rule(self, guild: discord.Guild, check_id: str) -> Rule:
         """Renvoie un objet contenant les données de la règle personnalisée
@@ -642,17 +639,15 @@ class Economy(commands.Cog):
         
         if account.balance >= settings['limitAllowance']:
             return await interaction.response.send_message(f"**Allocation non versée ·** Votre solde est au delà de la limite imposée par la banque ({pretty.humanize_number(settings['limitAllowance'])}{currency}).", ephemeral=True)
-        try:
-            if self.check_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', lambda x: x == today):
-                return await interaction.response.send_message(f"**Allocation non versée ·** Vous avez déjà perçu votre allocation pour aujourd'hui.", ephemeral=True)
+        
+        if self.check_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', lambda x: x == today):
+            return await interaction.response.send_message(f"**Allocation non versée ·** Vous avez déjà perçu votre allocation pour aujourd'hui.", ephemeral=True)
+        
+        trs = account.deposit_credits(settings['dailyAllowance'], "Allocation d'aide journalière")
+        trs.save()
+        self.set_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', today)
+        await interaction.response.send_message(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(settings['dailyAllowance'])}{currency}**\nVous avez désormais {account}", ephemeral=True)
             
-            trs = account.deposit_credits(settings['dailyAllowance'], "Allocation d'aide journalière")
-            trs.save()
-            self.set_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', today)
-            await interaction.response.send_message(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(settings['dailyAllowance'])}{currency}**\nVous avez désormais {account}", ephemeral=True)
-        except Exception as e:
-            logger.error(e, exc_info=True)
-                
     @app_commands.command(name='leaderboard')
     @app_commands.guild_only
     async def show_guild_leaderboard(self, interaction: discord.Interaction, top: app_commands.Range[int, 1, 50] = 10):
