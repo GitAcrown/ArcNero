@@ -11,6 +11,7 @@ from typing import List, Optional, Callable
 from datetime import datetime
 from tabulate import tabulate
 from collections import namedtuple
+from copy import copy
 import logging
 
 logger = logging.getLogger('arcnero.Economy')
@@ -138,7 +139,7 @@ class Account():
         try:
             conn = get_sqlite_database('economy', 'g' + str(self.guild.id))
             cursor = conn.cursor()
-            cursor.execute("INSERT OR IGNORE INTO accounts (member_id, balance) VALUES (?, ?)", (self.member.id, self.cog.get_guild_settings(self.guild)['defaultBalance']))
+            cursor.execute("INSERT OR IGNORE INTO accounts (member_id, balance) VALUES (?, ?)", (self.member.id, int(self.cog.get_guild_settings(self.guild)['defaultBalance'])))
             conn.commit()
             cursor.close()
             conn.close()
@@ -193,7 +194,7 @@ class Account():
         :return: Transaction
         """
         balance = self._get_balance()
-        return self._set_balance(balance + abs(amount), message, **extras)
+        return self._set_balance(balance + abs(int(amount)), message, **extras)
     
     def withdraw_credits(self, amount: int, message: str, **extras) -> 'Transaction':
         """Retirer des crédits du compte
@@ -203,7 +204,7 @@ class Account():
         :return: Transaction
         """
         balance = self._get_balance()
-        return self._set_balance(balance - abs(amount), message, **extras)
+        return self._set_balance(balance - abs(int(amount)), message, **extras)
     
     
     def balance_variation(self, since: float = 0.0) -> int:
@@ -374,7 +375,9 @@ class Economy(commands.Cog):
         settings = cursor.fetchall()
         cursor.close()
         conn.close()
-        return {s[0] : json.loads(s[1]) for s in settings}
+        
+        from_json = {s[0] : json.loads(s[1]) for s in settings}
+        return from_json
     
     def set_guild_settings(self, guild: discord.Guild, update: dict):
         """Met à jours les paramètres du serveur
@@ -397,7 +400,7 @@ class Economy(commands.Cog):
         :param guild: Serveur de la monnaie voulue
         :return: str
         """
-        return self.get_guild_settings(guild)['stringCurrency']
+        return str(self.get_guild_settings(guild)['stringCurrency'])
     
     def guild_total_credits(self, guild: discord.Guild) -> int:
         """Renvoie la quantité totale de crédits en circulation sur un serveur
@@ -637,17 +640,17 @@ class Economy(commands.Cog):
         currency = self.guild_currency(interaction.guild)
         today = datetime.now().strftime('%d/%m/%Y')
         
-        if account.balance >= settings['limitAllowance']:
+        if account.balance >= int(settings['limitAllowance']):
             return await interaction.response.send_message(f"**Allocation non versée ·** Votre solde est au delà de la limite imposée par la banque ({pretty.humanize_number(settings['limitAllowance'])}{currency}).", ephemeral=True)
         
         if self.check_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', lambda x: x == today):
             return await interaction.response.send_message(f"**Allocation non versée ·** Vous avez déjà perçu votre allocation pour aujourd'hui.", ephemeral=True)
         
-        trs = account.deposit_credits(settings['dailyAllowance'], "Allocation d'aide journalière")
+        trs = account.deposit_credits(int(settings['dailyAllowance']), "Allocation d'aide journalière")
         trs.save()
         self.set_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', today)
-        await interaction.response.send_message(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(settings['dailyAllowance'])}{currency}**\nVous avez désormais {account}", ephemeral=True)
-            
+        await interaction.response.send_message(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(int(settings['dailyAllowance']))}{currency}**\nVous avez désormais {account}", ephemeral=True)
+           
     @app_commands.command(name='leaderboard')
     @app_commands.guild_only
     async def show_guild_leaderboard(self, interaction: discord.Interaction, top: app_commands.Range[int, 1, 50] = 10):
