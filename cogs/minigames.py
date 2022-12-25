@@ -153,9 +153,9 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
             self.roulette[channel.id]['minimal_bet'] = bet
             self.roulette[channel.id]['players'][interaction.user.id] = {'bet': bet, 'alive': True}
             self.roulette[channel.id]['open'] = True
-            await interaction.response.send_message(f"**Roulette russe ·** Un lobby a été ouvert par **{interaction.user.name}** avec une mise minimale de {bet}{currency}\nRejoignez vite la partie avec `/minigame russian` ! (max. 6 joueurs)")
+            await interaction.response.send_message(f"**Roulette russe ·** Un lobby a été ouvert par **{interaction.user.name}** avec une mise minimale de **{bet}**{currency}\nRejoignez vite la partie avec `/minigame russian` ! (max. 6 joueurs)")
             
-            timeout = int(time.time() + 20)
+            timeout = int(time.time() + 60)
             while time.time() < timeout and len(list(self.roulette[channel.id]['players'].keys())) < 6:
                 await asyncio.sleep(0.5)
             self.roulette[channel.id]['open'] = False
