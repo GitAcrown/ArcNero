@@ -207,6 +207,18 @@ class Account():
         return self._set_balance(balance - abs(int(amount)), message, **extras)
     
     
+    def cancel_transaction(self, transaction: 'Transaction', new_message: str, **extras) -> 'Transaction':
+        """Annule une transaction et crée une nouvelle transaction opposée
+
+        :param transaction: Transaction à annuler
+        :return: Transaction
+        """
+        balance = self._get_balance()
+        trs = self._set_balance(balance - -transaction.delta, new_message, **extras)
+        trs.extras['refund_from'] = transaction.id
+        return trs
+    
+    
     def balance_variation(self, since: float = 0.0) -> int:
         """Calcule la variation du solde depuis un timestamp
 
@@ -490,14 +502,14 @@ class Economy(commands.Cog):
 
         :param guild: Serveur de la transaction
         :param transaction_id: Identifiant unique de la transaction
-        :return: Transaction ou None si aucune transaction n'a été trouvée
+        :return: Transaction (None si aucune transaction n'a été trouvée)
         """
         transactions = self.get_guild_transactions(guild)
         for t in transactions:
             if t.id == transaction_id:
                 return t
         return None
-    
+   
     def cleanup_transactions(self, guild: discord.Guild, expire_timestamp: float):
         """Efface toutes les transactions plus vieilles que le timestamp fourni
 
@@ -513,7 +525,7 @@ class Economy(commands.Cog):
         cursor.close()
         conn.close()
         self.last_cleanup = time.time()
-
+        
     
     def set_rule(self, guild: discord.Guild, check_id: str, value: str):
         """Ajouter une règle personnalisée
@@ -625,9 +637,9 @@ class Economy(commands.Cog):
         else:
             receiver_trs = receiver.deposit_credits(amount, f"Transfert de {sender.member}" if not message else f"{sender.member} » {message}")
             
-            sender_trs.extras['linked_transaction_id'] = receiver_trs.id
+            sender_trs.extras['linked_transaction'] = receiver_trs.id
             sender_trs.save()
-            receiver_trs.extras['linked_transaction_id'] = sender_trs.id
+            receiver_trs.extras['linked_transaction'] = sender_trs.id
             receiver_trs.save()
             await interaction.response.send_message(f"**Transfert réalisé ·** {member.mention} a reçu {pretty.humanize_number(amount)}{currency} de votre part.")
     
@@ -646,8 +658,7 @@ class Economy(commands.Cog):
         if self.check_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', lambda x: x == today):
             return await interaction.response.send_message(f"**Allocation non versée ·** Vous avez déjà perçu votre allocation pour aujourd'hui.", ephemeral=True)
         
-        trs = account.deposit_credits(int(settings['dailyAllowance']), "Allocation d'aide journalière")
-        trs.save()
+        account.deposit_credits(int(settings['dailyAllowance']), "Allocation d'aide journalière").save()
         self.set_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', today)
         await interaction.response.send_message(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(int(settings['dailyAllowance']))}{currency}**\nVous avez désormais {account}", ephemeral=True)
            

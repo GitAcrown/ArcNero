@@ -1,6 +1,8 @@
 # pyright: reportGeneralTypeIssues=false
 
 import discord
+from datetime import datetime
+import time
 from discord import app_commands
 from discord.ext import commands
 from tabulate import tabulate
@@ -13,18 +15,60 @@ from typing import Optional
 
 logger = logging.getLogger('arcnero.MiniGames')
 
+RUSSIAN_KILL_COM = [
+    "Finalement {0} en avait dans la cervelle !",
+    "Maintenant que {0} est parti·e on peut arrêter de jouer ! Non ? D'accord, très bien !",
+    "NOOON. Pas {0} !",
+    "Sa veste est à moi... Quoi, trop tôt ?",
+    "Bien, je crois que {0} et moi ne pourront plus jouer à la roulette ensemble...",
+    "Ci-gît {0}. Un gros nul.",
+    "RIP {0}.",
+    "J'aimais pas {0} de toute manière.",
+    "Hey {0} ! Je suis revenu avec la bouffe ! Oh...",
+    "Wow {0}, c'est presque de l'art moderne !",
+    "Sérieux ? C'est {0} qui est mort·e ? Ok, aucun suspens. Suivant.",
+    "Est-ce que ça veut dire que je n'ai pas rendre le livre que {0} m'a prêté ?",
+    "Mais non ! Il y a le sang de {0} partout sur le salon !",
+    "Je ne t'oublierai jamais {0}...",
+    "Au moins {0} ne fera plus chier personne.",
+    "Ne me regardez pas comme ça, c'est vous qui allez nettoyer.",
+    "Non je pleure pas, c'est vous qui pleurez. *snif*",
+    "JE SAVAIS QUE TU POUVAIS LE FAIRE !",
+    "A jamais, {0}."
+    "Génial. On se retrouve qu'avec les gens chiant.",
+    "Super, maintenant il ne reste que les ringards.",
+    "Je crois que j'en ai un peu sur moi. Dégueulasse.",
+    "J'ai même pas eu le temps d'aller chercher le popcorn. Vous êtes méchant.",
+    "Bordel, {0} a eu le temps de chier dans son froc avant de tirer.",
+    "Mince, je n'avais pas prévu un trou aussi large...",
+    "10/10 j'ai adoré voir {0} s'exploser le crâne, c'était GRANDIOSE.",
+    "J'espère que {0} avait une assurance vie...",
+    "Je ne sais pas comment, mais {1} a sûrement triché.",
+    "{0} disait qu'il voulait avoir une mort digne. Loupé.",
+    "Bon arrête de pleurer {1}. {0} sait parfaitement ce qu'il fait c'est un PROFESSIONNEL.",
+    "Donc c'est à ça vous ressemblez à l'intérieur !",
+    "Mes condoléances {1}. Je sais que tu étais *très* proche de {0}.",
+    "NON, DÎTES MOI QUE CE N'EST PAS VRAI ??? OSEF.",
+    "Heure de mort {2}. Origine : la stupidité.",
+    "Ne fais pas genre, tu as adoré {1} !",
+    "Mince, j'aurais préféré que ce soit {1} !",
+    "GE-NI-AL, {0} crève et {1} est toujours en vie ? Super...",
+    "Est-ce que tu manges ? T'as aucun respect {1} ! {0} vient de se tirer une balle dans le crâne !"
+    ]
+
 class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux exploitant l'économie du bot"):
     """Mini-jeux divers et variés"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.roulette = {}
         
     @app_commands.command(name="slot")
     @app_commands.checks.cooldown(5, 60)
-    async def slot_machine(self, interaction: discord.Interaction, bet: Optional[app_commands.Range[int, 1, 100]] = 0):
+    async def slot_machine(self, interaction: discord.Interaction, bet: app_commands.Range[int, 0, 100]):
         """Jouer à la machine à sous
 
-        :param bet: Montant mis en jeu (max. 100), ne rien mettre permet de consulter le tableau des gains
+        :param bet: Montant mis en jeu (compris entre 1 et 100), 0 = tableau des gains
         """
         member = interaction.user
         bank : Economy = self.bot.get_cog('Economy')
@@ -36,7 +80,7 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
         
         account = bank.get_account(member)
         if account.balance < bet:
-            return await interaction.response.send_message(f"**Erreur ·** Vous n'avez pas {bet}{currency} sur votre compte")
+            return await interaction.response.send_message(f"**Solde insuffisant ·** Vous n'avez pas {bet}{currency} sur votre compte")
         
         await interaction.response.defer()
         await asyncio.sleep(1.5)
@@ -69,12 +113,146 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
         em = discord.Embed(color=0x2F3136, description=pretty.codeblock(txt, 'fix'), title=f'**Machine à sous** | `Mise : {bet}{currency}`')
         if credits:
             em.set_footer(text=f"{wintxt}\nVous gagnez {pretty.humanize_number(credits)}{currency}")
-            trs = account.deposit_credits(credits, "Gain à la machine à sous")
+            account.deposit_credits(credits, "Gain à la machine à sous").save()
         else:
             em.set_footer(text=f"Vous perdez votre mise ({pretty.humanize_number(bet)}{currency})")
-            trs = account.withdraw_credits(bet, "Perte à la machine à sous")
-        trs.save()
+            account.withdraw_credits(bet, "Perte à la machine à sous").save()
         await interaction.followup.send(embed=em)
-    
+        
+    @app_commands.command(name="russian")
+    async def russian_roulette(self, interaction: discord.Interaction, bet: app_commands.Range[int, 10, 50]):
+        """Jouer à la roulette russe (jusqu'à 6 joueurs)
+
+        :param bet: Montant mis en jeu (compris entre 10 et 50)
+        """
+        channel : discord.TextChannel = interaction.channel
+        guild : discord.Guild = interaction.guild
+        bank : Economy = self.bot.get_cog('Economy')
+        currency = bank.guild_currency(guild)
+        default_cache = {
+            'open': False,
+            'playing': False,
+            'players': {},
+            'minimal_bet': 10
+            }
+        if not self.roulette.get(channel.id, {}):
+            self.roulette[channel.id] = default_cache
+            
+        if self.roulette[channel.id]['playing']:
+            return await interaction.response.send_message(f"**Partie en cours ·** Il y a déjà une partie en cours sur ce salon, attendez qu'elle se termine !", ephemeral=True)
+        
+        user_account = bank.get_account(interaction.user)
+        if not self.roulette[channel.id]['open']:
+            if user_account.balance < bet:
+                return await interaction.response.send_message(f"**Solde insuffisant ·** Vous n'avez pas {bet}{currency} sur votre compte !", ephemeral=True)
+            try:
+                first_trs = user_account.withdraw_credits(bet, 'Mise roulette russe')
+                first_trs.save()
+            except:
+                return await interaction.response.send_message(f"**Transaction impossible ·** Il y a eu un problème lors du retrait de votre mise de votre compte", ephemeral=True)
+            self.roulette[channel.id]['minimal_bet'] = bet
+            self.roulette[channel.id]['players'][interaction.user.id] = {'bet': bet, 'alive': True}
+            self.roulette[channel.id]['open'] = True
+            await interaction.response.send_message(f"**Roulette russe ·** Un lobby a été ouvert par **{interaction.user.name}** avec une mise minimale de {bet}{currency}\nRejoignez vite la partie avec `/minigame russian` ! (max. 6 joueurs)")
+            
+            timeout = int(time.time() + 20)
+            while time.time() < timeout and len(list(self.roulette[channel.id]['players'].keys())) < 6:
+                await asyncio.sleep(0.5)
+            self.roulette[channel.id]['open'] = False
+            if len(self.roulette[channel.id]['players'].keys()) < 2:
+                user_account.cancel_transaction(first_trs, "Remboursement mise roulette russe").save()
+                return await channel.send(f"**Roulette russe annulée ·** Partie annulée en raison du manque de joueurs\n{interaction.user.mention} a été remboursé de sa mise")
+            await channel.send(f"**Fermeture du lobby ·** La partie va bientôt commencer !")
+            
+        else:
+            if len(self.roulette[channel.id]['players'].keys()) >= 6:
+                return await interaction.response.send_message(f"**Lobby plein ·** Il y a déjà 6 joueurs dans le lobby !", ephemeral=True)
+            if bet < self.roulette[channel.id]['minimal_bet']:
+                return await interaction.response.send_message(f"**Mise insuffisante ·** Vous ne pouvez pas miser moins que le créateur du lobby, c'est-à-dire {self.roulette[interaction.channel_id]['minimal_bet']}{currency} !", ephemeral=True)
+            if user_account.balance < bet:
+                return await interaction.response.send_message(f"**Solde insuffisant ·** Vous n'avez pas {bet}{currency} sur votre compte !", ephemeral=True)
+            try:
+                user_account.withdraw_credits(bet, 'Mise roulette russe').save()
+            except:
+                return await interaction.response.send_message(f"**Transaction impossible ·** Il y a eu un problème lors du retrait de votre mise de votre compte", ephemeral=True)
+            self.roulette[channel.id]['players'][interaction.user.id] = {'bet': bet, 'alive': True}
+            return await interaction.response.send_message(f"**Nouveau joueur ·** ***{interaction.user.display_name}*** a rejoint la partie avec une mise de **{bet}**{currency} !")
+        
+        steps = [
+            'Je vais mettre une balle dans ce revolver...',
+            '...puis faire tourner le barrilet un coup...',
+            '...et vous vous le passerez à tour de rôle...',
+            f"...jusqu'à que l'un de vous s'explose {random.choice(['le crâne', 'la tête', 'la caboche'])} !",
+            'Soyez le dernier en vie, et vous remporterez la mise.',
+            'Bonne chance !'
+        ]
+        msg = None
+        for i in range(6):
+            em = discord.Embed(description=f'**Préparation... ({i+1}/6) ·** *{steps[i]}*', color=0x2F3136)
+            em.set_footer(text='•' * min(i + 1, len(self.roulette[interaction.channel_id]['players'].keys())))
+            if msg:
+                await msg.edit(embed=em)
+            else:
+                msg = await channel.send(embed=em)
+            await asyncio.sleep(2)
+        
+        round = 1
+        while len([p for p in self.roulette[interaction.channel_id]['players'] if self.roulette[interaction.channel_id]['players'][p]['alive']]) > 1:
+            if round > 1:
+                round_msg = random.choice((f"***{self.bot.user.name}*** remet en ordre du révolver...", 
+                    f"***{self.bot.user.name}*** remet une balle dans le barillet...", 
+                    f"***{self.bot.user.name}*** nettoie le révolver avant de le recharger d'une balle..."))
+            else:
+                round_msg = f"***{self.bot.user.name}*** charge le révolver..."
+            await channel.send(round_msg)
+            await asyncio.sleep(1.5)
+            
+            await channel.send(f"**~~────~~ Round {round} ~~────~~**")
+            chamber = 6
+            circle = list(self.roulette[interaction.channel_id]['players'].keys())[:]
+            random.shuffle(circle)
+            circle = circle * 3
+            while chamber:
+                shot = random.randint(1, chamber) == 1 
+                player = guild.get_member(circle[0])
+                player_txt = random.choice(("**{}** presse le révolver à sa tempe et appuie doucement sur la détente...",
+                                            "**{}** dirige le révolver vers son crâne et pose son doigt sur la détente...",
+                                            "**{}** place le révolver sous sa machoire et s'apprête à appuyer sur la détente..."))
+                await channel.send(player_txt.format(player.name))
+                if shot:
+                    await asyncio.sleep(random.uniform(3.0, 4.0))
+                    await channel.send(f"` 💥 ` **BANG ·** **{player.name}** {random.choice(['est mort.e', 'est décédé.e', 'est inanimé.e', 'a crevé.e', 'est inerte'])}")
+                    self.roulette[interaction.channel_id]['players'][player.id]['alive'] = False
+                    
+                    com_player = random.choice([guild.get_member(p) for p in self.roulette[interaction.channel_id]['players'] if self.roulette[interaction.channel_id]['players'][p]['alive']])
+                    death_time = datetime.now().strftime('%H:%M:%S')
+                    com_msg = random.choice(RUSSIAN_KILL_COM).format(player.name, com_player, death_time)
+                    await asyncio.sleep(random.uniform(2.5, 3.5))
+                    await channel.send(com_msg)
+                    break
+                else:
+                    await asyncio.sleep(random.uniform(2.0, 3.0))
+                    rdm = random.choice(["est sauvé.e", "a survécu.e", "n'a rien eu", "est sain et sauf"])
+                    emoji = random.choice(['` 🍀 `', '` 😳 `', '` 💯 `', '` 🙏 `', '` 🤞 `'])
+                    await channel.send(f"{emoji} **CLICK ·** **{player.name}** {rdm}")
+                    circle.remove(circle[0])
+                    chamber -= 1
+                    await asyncio.sleep(2)
+            round += 1
+        
+        await asyncio.sleep(2)
+        endmsg = await channel.send(f"**PARTIE TERMINÉE ·** Nous avons un.e gagnant.e !")
+        await asyncio.sleep(2)
+        winner = guild.get_member([p for p in self.roulette[interaction.channel_id]['players'] if self.roulette[interaction.channel_id]['players'][p]['alive']][0])
+        total_bet = sum([self.roulette[interaction.channel_id]['players'][p]['bet'] for p in self.roulette[interaction.channel_id]['players']])
+
+        winner_account = bank.get_account(winner)
+        winner_account.deposit_credits(total_bet, "Gain roulette russe").save()
+        em = discord.Embed(description=f"Bravo {winner.mention}, tu es la dernière personne en vie !\nTu remportes la totalité des mises, c'est-à-dire **{pretty.humanize_number(total_bet)}**{currency}.", color=0x2F3136)
+        await endmsg.edit(embed=em)
+        
+        self.roulette[channel.id] = default_cache
+                
+                
 async def setup(bot):
     await bot.add_cog(MiniGames(bot))
