@@ -1,18 +1,19 @@
 # pyright: reportGeneralTypeIssues=false
 
-import discord
-import time
 import json
+import logging
+import time
+from collections import namedtuple
+from datetime import datetime
+from typing import Callable, List, Optional
+
+import discord
 from discord import app_commands
 from discord.ext import commands
-from common.dataio import get_sqlite_database
-from common.utils import pretty, fuzzy
-from typing import List, Optional, Callable
-from datetime import datetime
 from tabulate import tabulate
-from collections import namedtuple
-from copy import copy
-import logging
+
+from common.dataio import get_sqlite_database
+from common.utils import fuzzy, pretty
 
 logger = logging.getLogger('arcnero.Economy')
 
@@ -26,6 +27,7 @@ DEFAULT_SETTINGS = [
 ]
 TRANSACTION_EXPIRATION_DELAY = 604800 # 7 jours
 TRANSACTIONS_CLEANUP_DELAY = 3600 # 1 heure
+
 
 class EconomyError(Exception):
     pass
@@ -122,6 +124,7 @@ class TransactionsHistoryView(discord.ui.View):
 
 
 class Account():
+    """Représente le compte bancaire d'un membre"""
     def __init__(self, cog: 'Economy', member: discord.Member) -> None:
         self.cog = cog
         self.member = member
@@ -257,6 +260,7 @@ class Account():
     
     
 class Transaction():
+    """Représente une transaction effectuée par un membre"""
     def __init__(self, cog: 'Economy', account: Account, delta: int, message: str, timestamp: float, **extras) -> None:
         self.cog = cog
         self.account = account
@@ -317,7 +321,7 @@ class Transaction():
     
 
 class Economy(commands.Cog):
-    """Gestion de l'économie sur le bot"""
+    """Module central de gestion de l'économie"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -660,7 +664,7 @@ class Economy(commands.Cog):
         
         account.deposit_credits(int(settings['dailyAllowance']), "Allocation d'aide journalière").save()
         self.set_rule(interaction.guild, f'{interaction.user.id}@dailyAllowance', today)
-        await interaction.response.send_message(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(int(settings['dailyAllowance']))}{currency}**\nVous avez désormais {account}", ephemeral=True)
+        await interaction.response.send_message(f"**Allocation versée ·** Vous avez reçu **{pretty.humanize_number(int(settings['dailyAllowance']))}{currency}**\nVous avez désormais {account}")
            
     @app_commands.command(name='leaderboard')
     @app_commands.guild_only

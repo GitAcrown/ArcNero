@@ -1,17 +1,19 @@
 # pyright: reportGeneralTypeIssues=false
 
-import discord
-from datetime import datetime
+import asyncio
+import logging
+import random
 import time
+from datetime import datetime
+from typing import Optional
+
+import discord
 from discord import app_commands
 from discord.ext import commands
 from tabulate import tabulate
-import logging
-import random
-import asyncio
-from common.utils import pretty
+
 from cogs.economy import Economy
-from typing import Optional
+from common.utils import pretty
 
 logger = logging.getLogger('arcnero.MiniGames')
 
