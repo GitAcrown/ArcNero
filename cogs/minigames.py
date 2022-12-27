@@ -39,8 +39,9 @@ RUSSIAN_KILL_COM = [
     "Ne me regardez pas comme ça, c'est vous qui allez nettoyer.",
     "Non je pleure pas, c'est vous qui pleurez. *snif*",
     "YES {0} ! JE SAVAIS QUE TU POUVAIS LE FAIRE !",
-    "A jamais, {0}."
+    "A jamais, {0}.",
     "Génial. On se retrouve qu'avec les gens chiant.",
+    "Dommage, je t'aimais bien {0}. Maintenant va falloir que je stalk quelqu'un d'autre...",
     "Ouais. Encore un qu'il va falloir remplacer par un bot...",
     "Super, maintenant il ne reste que les ringards.",
     "Je crois que j'en ai un peu sur moi. Dégueulasse.",
