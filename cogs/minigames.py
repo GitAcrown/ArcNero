@@ -211,7 +211,7 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
             
             await channel.send(f"**~~────~~ Round {round} ~~────~~**")
             chamber = 6
-            circle = list(self.roulette[interaction.channel_id]['players'].keys())[:]
+            circle = list([p for p in self.roulette[interaction.channel_id]['players'] if self.roulette[interaction.channel_id]['players'][p]['alive']])[:]
             random.shuffle(circle)
             circle = circle * 3
             while chamber:

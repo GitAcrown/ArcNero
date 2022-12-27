@@ -30,5 +30,3 @@ def get_sqlite_database(folder_name: str, db_name: str = 'global') -> sqlite3.Co
     
     conn = sqlite3.connect(str(db_file))
     return conn
-
-    

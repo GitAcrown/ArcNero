@@ -337,6 +337,10 @@ class Economy(commands.Cog):
     async def on_ready(self):
         self._initialize_database()
         
+    @commands.Cog.listener()
+    async def on_guild_join(self, guild: discord.Guild):
+        self._initialize_database()
+        
     def _initialize_database(self):
         for guild in self.bot.guilds:
             conn = get_sqlite_database('economy', 'g' + str(guild.id))
