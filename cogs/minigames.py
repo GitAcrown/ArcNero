@@ -178,7 +178,7 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
                 first_trs = user_account.withdraw_credits(bet, 'Mise roulette russe')
                 first_trs.save()
             except:
-                return await interaction.response.send_message(f"**Transaction impossible ·** Il y a eu un problème lors du retrait de votre mise de votre compte", ephemeral=True)
+                return await interaction.response.send_message(f"**Transaction impossible ·** Il y a eu un problème lors du retrait de votre mise de votre compte.", ephemeral=True)
             self.roulette[channel.id]['minimal_bet'] = bet
             self.roulette[channel.id]['players'][interaction.user.id] = {'bet': bet, 'alive': True}
             self.roulette[channel.id]['open'] = True
@@ -190,7 +190,7 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
             self.roulette[channel.id]['open'] = False
             if len(self.roulette[channel.id]['players'].keys()) < 2:
                 user_account.cancel_transaction(first_trs, "Remboursement mise roulette russe").save()
-                return await channel.send(f"**Roulette russe annulée ·** Partie annulée en raison du manque de joueurs\n{interaction.user.mention} a été remboursé de sa mise")
+                return await channel.send(f"**Roulette russe annulée ·** Partie annulée en raison du manque de joueurs\n{interaction.user.mention} a été remboursé de sa mise.")
             await channel.send(f"**Fermeture du lobby ·** La partie va bientôt commencer !")
             
         else:
