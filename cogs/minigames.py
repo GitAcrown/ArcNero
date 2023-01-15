@@ -80,12 +80,17 @@ RUSSIAN_KILL_COM = [
     "Ne t'inquiète pas, j'irais chercher tes allocs à ta place."
     ]
 
+ACHIEVEMENTS = {
+    ''
+}
+
 class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux exploitant l'économie du bot"):
     """Mini-jeux divers et variés"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.roulette = {}
+        self._achievements = ACHIEVEMENTS
         
     @app_commands.command(name="slot")
     @app_commands.checks.cooldown(5, 60)
@@ -200,7 +205,7 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
             except:
                 return await interaction.response.send_message(f"**Transaction impossible ·** Il y a eu un problème lors du retrait de votre mise de votre compte", ephemeral=True)
             self.roulette[channel.id]['players'][interaction.user.id] = {'bet': bet, 'alive': True}
-            return await interaction.response.send_message(f"**Nouveau joueur ·** ***{interaction.user.display_name}*** a rejoint la partie avec une mise de **{bet}**{currency} !")
+            return await interaction.response.send_message(f"**Nouveau joueur ·** ***{interaction.user.name}*** a rejoint la partie avec une mise de **{bet}**{currency} !")
         
         steps = [
             'Je vais mettre une balle dans ce revolver...',
@@ -223,7 +228,7 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
         round = 1
         while len([p for p in self.roulette[interaction.channel_id]['players'] if self.roulette[interaction.channel_id]['players'][p]['alive']]) > 1:
             if round > 1:
-                round_msg = random.choice((f"***{self.bot.user.name}*** remet en ordre du révolver...", 
+                round_msg = random.choice((f"***{self.bot.user.name}*** remet en ordre le révolver...", 
                     f"***{self.bot.user.name}*** remet une balle dans le barillet...", 
                     f"***{self.bot.user.name}*** nettoie le révolver avant de le recharger d'une balle..."))
             else:
@@ -248,7 +253,7 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
                     await channel.send(f"` 💥 ` **BANG ·** **{player.name}** {random.choice(['est mort.e', 'est décédé.e', 'est inanimé.e', 'a crevé.e', 'est inerte'])}")
                     self.roulette[interaction.channel_id]['players'][player.id]['alive'] = False
                     
-                    com_player = random.choice([guild.get_member(p) for p in self.roulette[interaction.channel_id]['players'] if self.roulette[interaction.channel_id]['players'][p]['alive']])
+                    com_player = random.choice([guild.get_member(p).name for p in self.roulette[interaction.channel_id]['players'] if self.roulette[interaction.channel_id]['players'][p]['alive']])
                     death_time = datetime.now().strftime('%H:%M:%S')
                     com_msg = random.choice(RUSSIAN_KILL_COM).format(player.name, com_player, death_time)
                     await asyncio.sleep(random.uniform(2.5, 3.5))
