@@ -27,7 +27,7 @@ def troncate_text(text: str, length: int, add_ellipsis: bool = True) -> str:
         """
         if len(text) <= length:
             return text
-        return text[:length] + '…' if add_ellipsis else ''
+        return text[:length - 1] + '…' if add_ellipsis else ''
     
 def humanize_number(number: Union[int, float], separator: str = ' ') -> str:
     """Formatte un nombre pour qu'il soit plus lisible

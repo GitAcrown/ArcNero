@@ -241,7 +241,7 @@ class Account():
         em.add_field(name="Solde", value=pretty.codeblock(self.__str__()))
         
         balance_var = self.balance_variation(time.time() - 86400) # 1 jour
-        em.add_field(name="Variation (24h)", value=pretty.codeblock(f'{balance_var:+}', lang='fix' if balance_var < 0 else 'css'))
+        em.add_field(name="Variation (24h)", value=pretty.codeblock(f'{balance_var:+}', lang='diff'))
         
         lb = self.cog.guild_leaderboard(self.guild)
         try:
