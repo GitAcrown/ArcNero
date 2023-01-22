@@ -438,7 +438,7 @@ class Achievements(commands.Cog):
 
         :param member: Utilisateur visé par la commande
         """
-        return await interaction.response.send_message(embed=self.get_prestige_embed(member))
+        return await interaction.response.send_message(embed=self.get_prestige_embed(member), ephemeral=True)
         
 async def setup(bot: commands.Bot):
     await bot.add_cog(Achievements(bot))
