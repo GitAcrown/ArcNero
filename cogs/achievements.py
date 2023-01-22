@@ -276,6 +276,12 @@ class Achievements(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         
+        self.context_menu = app_commands.ContextMenu(
+            name='Prestige',
+            callback=self.usercommand_prestige,
+        )
+        self.bot.tree.add_command(self.context_menu)
+        
     @commands.Cog.listener()
     async def on_ready(self):
         self._initialize_database()
@@ -372,6 +378,18 @@ class Achievements(commands.Cog):
         if self.member_completed_achievements(member):
             return sum([a.prestige for a in self.member_completed_achievements(member)])
         return 0
+    
+    def get_prestige_embed(self, member: discord.Member) -> discord.Embed:
+        """Retourne l'embed de prestige du membre donné.
+
+        :param member: Membre dont on veut l'embed de prestige
+        :return: discord.Embed
+        """
+        em = discord.Embed(title=f"**Prestige** · {member.display_name}", color=0x2F3136)
+        em.add_field(name="Prestige", value=pretty.codeblock(f'{self.get_member_prestige(member)}', lang='css'))
+        em.add_field(name="Succès débloqués", value=pretty.codeblock(f'{len(self.member_completed_achievements(member))}', lang='fix'))
+        em.set_thumbnail(url=member.display_avatar.url)
+        return em
         
         
     @app_commands.command(name="achievements")
@@ -408,16 +426,19 @@ class Achievements(commands.Cog):
         :param member: Membre dont on veut le prestige
         """
         if member:
-            em = discord.Embed(title=f"**Prestige** · {member.display_name}", color=0x2F3136)
-            em.add_field(name="Prestige", value=pretty.codeblock(f'{self.get_member_prestige(member)}', lang='css'))
-            em.add_field(name="Succès débloqués", value=pretty.codeblock(f'{len(self.member_completed_achievements(member))}', lang='fix'))
-            em.set_thumbnail(url=member.display_avatar.url)
-            return await interaction.response.send_message(embed=em)
+            return await interaction.response.send_message(embed=self.get_prestige_embed(member))
 
         members = [(m.name, self.get_member_prestige(m)) for m in interaction.guild.members]
         sorted_members = sorted(members, key=lambda m: m[1], reverse=True)
         em = discord.Embed(title=f"**Prestige** · Top 20 sur *{interaction.guild.name}*", description=pretty.codeblock(tabulate(sorted_members[:20], headers=('Membre', 'Prestige'))), color=0x2F3136)
         await interaction.response.send_message(embed=em)
+        
+    async def usercommand_prestige(self, interaction: discord.Interaction, member: discord.Member):
+        """Menu contextuel permettant l'affichage du prestige d'un membre
+
+        :param member: Utilisateur visé par la commande
+        """
+        return await interaction.response.send_message(embed=self.get_prestige_embed(member))
         
 async def setup(bot: commands.Bot):
     await bot.add_cog(Achievements(bot))
