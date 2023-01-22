@@ -5,14 +5,14 @@ import logging
 import random
 import time
 from datetime import datetime
-from typing import Optional
+from typing import List
 
 import discord
 from discord import app_commands
 from discord.ext import commands
-from tabulate import tabulate
 
 from cogs.economy import Economy
+from cogs.achievements import Achievements, Achievement
 from common.utils import pretty
 
 logger = logging.getLogger('arcnero.MiniGames')
@@ -77,20 +77,25 @@ RUSSIAN_KILL_COM = [
     "Je veux pas dire, mais c'était seulement du paintball et {0} est quand même mort.",
     "Yes, merci {0} de contribuer à la baisse du chômage !",
     "Mort en faisant ce qu'il aime, tirer des coups !",
-    "Ne t'inquiète pas, j'irais chercher tes allocs à ta place."
+    "Ne t'inquiète pas, j'irais chercher tes allocs à ta place.",
+    "Je suis sûr que {0} a fait un pacte avec le diable."
     ]
-
-ACHIEVEMENTS = {
-    ''
-}
 
 class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux exploitant l'économie du bot"):
     """Mini-jeux divers et variés"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self._achievements : List[Achievement] = [
+            Achievement(self, 'masochist', 'Masochiste', "Jouer à 10 parties de roulette russe", 20, lambda tracker: int(tracker.status) >= 10, lambda tracker: f"{tracker.status}/10", 0),
+            Achievement(self, 'firstdeath', 'Première mort', "Se faire tuer pour la première fois", 5, lambda tracker: int(tracker.status) >= 1, lambda tracker: f"{tracker.status}/1", 0),
+            Achievement(self, 'unlucky', 'Malchanceux', "Se faire tuer au début d'un round", 10, lambda tracker: int(tracker.status) >= 1, lambda tracker: f"{tracker.status}/1", 0),
+            Achievement(self, 'victory', 'Vainqueur', "Gagner une partie de roulette russe", 20, lambda tracker: int(tracker.status) >= 1, lambda tracker: f"{tracker.status}/1", 0),
+            Achievement(self, 'champion', 'Grand champion', "Gagner 10 parties de roulette russe", 50, lambda tracker: int(tracker.status) >= 10, lambda tracker: f"{tracker.status}/10", 0),
+            Achievement(self, 'crimeboss', 'Patron du crime', "Gagner 1000 crédits en jouant à la roulette russe", 30, lambda tracker: int(tracker.status) >= 1000, lambda tracker: f"{tracker.status}/1000", 0),
+            Achievement(self, 'slotmaster', 'Maître de la machine', "Gagner 1000 crédits en jouant à la machine à sous", 30, lambda tracker: int(tracker.status) >= 1000, lambda tracker: f"{tracker.status}/1000", 0),
+        ]
         self.roulette = {}
-        self._achievements = ACHIEVEMENTS
         
     @app_commands.command(name="slot")
     @app_commands.checks.cooldown(5, 60)
@@ -101,6 +106,7 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
         """
         member = interaction.user
         bank : Economy = self.bot.get_cog('Economy')
+        achv : Achievements = self.bot.get_cog('Achievements')
         currency = bank.guild_currency(interaction.guild)
         if not bet:
             em = discord.Embed(title="Tableau des gains", description="```Fruit = Offre + 100{}\nTrèfle = Offre + 3x Offre\nPièce = Offre + 5x Offre```".format(currency), color=0x2F3136)
@@ -112,15 +118,22 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
             return await interaction.response.send_message(f"**Solde insuffisant ·** Vous n'avez pas {bet}{currency} sur votre compte")
         
         await interaction.response.defer()
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(1)
         symbols = ['🍎', '🍊', '🪙', '🍇', '🍀']
         wheel = ['🍀', '🍎', '🍊', '🪙', '🍇', '🍀', '🍎']
-        def _column():
-            center = random.choice(symbols)
+        def _column(previous_center=None):
+            if previous_center:
+                pv_index = wheel.index(previous_center)
+                center = random.choice([wheel[pv_index - 1], wheel[pv_index], wheel[pv_index + 1]])
+            else:
+                center = random.choice(symbols)
             top, bottom = wheel[symbols.index(center) + 2], wheel[symbols.index(center)]
             return top, center, bottom
         
-        columns = [_column(), _column(), _column()]
+        cola = _column()
+        colb = _column(cola[1])
+        colc = _column(colb[1])
+        columns = [cola, colb, colc]
         center_row = [columns[0][1], columns[1][1], columns[2][1]]
         if center_row[0] == center_row[1] == center_row[2]:
             if center_row[0] in ['🍎', '🍊', '🍇', ]:
@@ -143,26 +156,29 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
         if credits:
             em.set_footer(text=f"{wintxt}\nVous gagnez {pretty.humanize_number(credits)}{currency}")
             account.deposit_credits(credits, "Gain à la machine à sous").save()
+            a_slotmaster = achv.get_achievement(self, 'slotmaster').get_tracker(member)
+            a_slotmaster.eval(a_slotmaster.status + credits)
         else:
             em.set_footer(text=f"Vous perdez votre mise ({pretty.humanize_number(bet)}{currency})")
             account.withdraw_credits(bet, "Perte à la machine à sous").save()
         await interaction.followup.send(embed=em)
         
     @app_commands.command(name="russian")
-    async def russian_roulette(self, interaction: discord.Interaction, bet: app_commands.Range[int, 10, 50]):
+    async def russian_roulette(self, interaction: discord.Interaction, bet: app_commands.Range[int, 20, 100]):
         """Jouer à la roulette russe (jusqu'à 6 joueurs)
 
-        :param bet: Montant mis en jeu (compris entre 10 et 50)
+        :param bet: Montant mis en jeu (compris entre 20 et 100)
         """
         channel : discord.TextChannel = interaction.channel
         guild : discord.Guild = interaction.guild
         bank : Economy = self.bot.get_cog('Economy')
+        achv : Achievements = self.bot.get_cog('Achievements')
         currency = bank.guild_currency(guild)
         default_cache = {
             'open': False,
             'playing': False,
             'players': {},
-            'minimal_bet': 10
+            'minimal_bet': 20
             }
         if not self.roulette.get(channel.id, {}):
             self.roulette[channel.id] = default_cache
@@ -224,6 +240,11 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
             else:
                 msg = await channel.send(embed=em)
             await asyncio.sleep(2)
+            
+        for p_id in self.roulette[channel.id]['players']:
+            p = guild.get_member(p_id)
+            a_maso = achv.get_achievement(self, 'masochist').get_tracker(p)
+            a_maso.eval(a_maso.status + 1)
         
         round = 1
         while len([p for p in self.roulette[interaction.channel_id]['players'] if self.roulette[interaction.channel_id]['players'][p]['alive']]) > 1:
@@ -241,7 +262,9 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
             circle = list([p for p in self.roulette[interaction.channel_id]['players'] if self.roulette[interaction.channel_id]['players'][p]['alive']])[:]
             random.shuffle(circle)
             circle = circle * 3
+            turn_count = 0
             while chamber:
+                turn_count += 1
                 shot = random.randint(1, chamber) == 1 
                 player = guild.get_member(circle[0])
                 player_txt = random.choice(("**{}** presse le révolver à sa tempe et appuie doucement sur la détente...",
@@ -258,6 +281,13 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
                     com_msg = random.choice(RUSSIAN_KILL_COM).format(player.name, com_player, death_time)
                     await asyncio.sleep(random.uniform(2.5, 3.5))
                     await channel.send(com_msg)
+                    
+                    if turn_count == 1:
+                        a_unlucky = achv.get_achievement(self, 'unlucky').get_tracker(player)
+                        a_unlucky.eval(a_unlucky.status + 1)
+                    
+                    a_firstdeath = achv.get_achievement(self, 'firstdeath').get_tracker(player)
+                    a_firstdeath.eval(a_firstdeath.status + 1)
                     break
                 else:
                     await asyncio.sleep(random.uniform(2.0, 3.0))
@@ -277,6 +307,16 @@ class MiniGames(commands.GroupCog, group_name="minigame", description="Mini-jeux
 
         winner_account = bank.get_account(winner)
         winner_account.deposit_credits(total_bet, "Gain roulette russe").save()
+        
+        a_victory = achv.get_achievement(self, 'victory').get_tracker(winner)
+        a_victory.eval(a_victory.status + 1)
+        
+        a_champion = achv.get_achievement(self, 'champion').get_tracker(winner)
+        a_champion.eval(a_champion.status + 1)
+        
+        a_crimeboss = achv.get_achievement(self, 'crimeboss').get_tracker(winner)
+        a_crimeboss.eval(a_crimeboss.status + total_bet)
+        
         em = discord.Embed(description=f"Bravo {winner.mention}, tu es la dernière personne en vie !\nTu remportes la totalité des mises, c'est-à-dire **{pretty.humanize_number(total_bet)}**{currency}.", color=0x2F3136)
         await endmsg.edit(embed=em)
         
