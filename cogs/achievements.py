@@ -403,9 +403,9 @@ class Achievements(commands.Cog):
     
     @app_commands.command(name="prestige")
     async def prestige_leaderboard(self, interaction: discord.Interaction, member: Optional[discord.Member] = None):
-        """Affiche le prestige du membre donné
+        """Affiche le top des membres du serveur en fonction de leur prestige, ou le prestige du membre donné si spécifié
 
-        :param member: Membre dont on veut le prestige si spécifié
+        :param member: Membre dont on veut le prestige
         """
         if member:
             em = discord.Embed(title=f"**Prestige** · {member.display_name}", description=f"**{self.get_member_prestige(member)}**", color=0x2F3136)
@@ -414,7 +414,7 @@ class Achievements(commands.Cog):
 
         members = [(m.name, self.get_member_prestige(m)) for m in interaction.guild.members]
         sorted_members = sorted(members, key=lambda m: m[1], reverse=True)
-        em = discord.Embed(title=f"**Prestige** · {interaction.guild.name}", description=pretty.codeblock(tabulate(sorted_members, headers=('Membre', 'Prestige'))), color=0x2F3136)
+        em = discord.Embed(title=f"**Prestige** · Top 20 sur *{interaction.guild.name}*", description=pretty.codeblock(tabulate(sorted_members[:20], headers=('Membre', 'Prestige'))), color=0x2F3136)
         await interaction.response.send_message(embed=em)
         
 async def setup(bot: commands.Bot):
