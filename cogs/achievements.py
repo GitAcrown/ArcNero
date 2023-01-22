@@ -408,7 +408,9 @@ class Achievements(commands.Cog):
         :param member: Membre dont on veut le prestige
         """
         if member:
-            em = discord.Embed(title=f"**Prestige** · {member.display_name}", description=f"**{self.get_member_prestige(member)}**", color=0x2F3136)
+            em = discord.Embed(title=f"**Prestige** · {member.display_name}", color=0x2F3136)
+            em.add_field(name="Prestige", value=pretty.codeblock(f'{self.get_member_prestige(member)}', lang='css'))
+            em.add_field(name="Succès débloqués", value=pretty.codeblock(f'{len(self.member_completed_achievements(member))}', lang='fix'))
             em.set_thumbnail(url=member.display_avatar.url)
             return await interaction.response.send_message(embed=em)
 
