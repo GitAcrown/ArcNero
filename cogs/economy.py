@@ -1,4 +1,3 @@
-# pyright: reportGeneralTypeIssues=false
 
 import json
 import logging
@@ -131,8 +130,10 @@ class Account():
         self.guild = member.guild
         self.__initialize_account()
         
-    def __eq__(self, o: object) -> bool:
-        return self.member.id == o.member.id
+    def __eq__(self, __o: object) -> bool:
+        if isinstance(__o, Account):
+            return __o.member.id == self.member.id
+        return False
     
     def __str__(self) -> str:
         return f"{pretty.humanize_number(self._get_balance())}{self.cog.guild_currency(self.guild)}"
