@@ -14,7 +14,7 @@ from discord.ext import commands
 from cogs.economy import Economy
 from common.utils import pretty
 
-logger = logging.getLogger('arcnero.MiniGames')
+logger = logging.getLogger('ctrlalt.MiniGames')
 
 RUSSIAN_KILL_COM = [
     "Finalement {0} en avait dans la cervelle !",

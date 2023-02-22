@@ -14,7 +14,7 @@ from tabulate import tabulate
 from common.dataio import get_sqlite_database
 from common.utils import fuzzy, pretty
 
-logger = logging.getLogger('arcnero.Economy')
+logger = logging.getLogger('ctrlalt.Economy')
 
 Rule = namedtuple('Rule', ('id', 'value'))
 
