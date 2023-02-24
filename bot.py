@@ -20,8 +20,8 @@ intents.members = True
 
 async def main():
     bot = commands.Bot(
-       command_prefix=commands.when_mentioned,
-        description="Version allégée de NERO dédiée aux jeux",
+        command_prefix=commands.when_mentioned,
+        description="Version allégée de CTRLAlt dédiée aux jeux",
         help_command=None,
         intents=intents 
     )
