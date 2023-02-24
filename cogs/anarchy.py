@@ -683,7 +683,7 @@ class ClassicGame:
         timeout = time.time() + TIMEOUTS['vote_round']
         while len(self.voters) < len(self.players) and time.time() < timeout:
             await asyncio.sleep(0.5)
-        await asyncio.sleep(2)
+        await asyncio.sleep(4)
         self.status = 'idle'
         voteview.stop()
         await votemsg.edit(view=None)

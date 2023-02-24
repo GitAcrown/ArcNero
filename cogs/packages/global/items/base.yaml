@@ -1,0 +1,71 @@
+_metadata:
+  id: base
+  last_updated: 2023-02-21
+  
+# Food
+banana:
+  name: Banane
+  description: Une banane. C'est un fruit jaune.
+  value: 2
+  food:
+    nutrition: 3
+apple:
+  name: Pomme
+  description: Une simple pomme.
+  value: 2
+  food:
+    nutrition: 2
+bread:
+  name: Pain
+  description: Un morceau de pain blanc.
+  value: 7
+  food:
+    nutrition: 5
+  decay:
+    time: 86400
+    result: 
+      stale_bread: 1
+stale_bread:
+  name: Pain rassis
+  description: Un morceau de pain blanc rassis.
+  value: 3
+  food:
+    nutrition: 2
+
+# Potions
+
+stamina_potion:
+  name: Potion d'énergie
+  description: Une potion qui redonne de l'énergie.
+  value: 30
+  on_use:
+    stamina: 10
+
+
+# Resources
+wood:
+  name: Bois
+  value: 3
+coal:
+  name: Charbon
+  value: 5
+stone:
+  name: Pierre
+  value: 1
+copper:
+  name: Cuivre
+  value: 8
+iron:
+  name: Fer
+  value: 12
+silver:
+  name: Argent
+  value: 20
+gold:
+  name: Or
+  value: 50
+diamond:
+  name: Diamant
+  value: 100
+
+# Equipment
