@@ -113,7 +113,7 @@ class RegisterPlayersView(discord.ui.View):
             color=discord.Color.blurple()
         )
         embed.add_field(name="Extensions utilisées", value='\n'.join([f'• **{pack.name}** `[{len(pack.black_cards)}B|{len(pack.white_cards)}W]`' for pack in self.game.packs]))
-        embed.add_field(name="Nombre de rounds", value=f"**{self.game.rounds}** (Env. {int(self.game.rounds * 2.5)} min.)")
+        embed.add_field(name="Nombre de rounds", value=f"**{self.game.rounds}** (Env. {int(self.game.rounds * 2)} min.)")
         embed.add_field(name=f"Joueurs inscrits ({len(self.game.players)}/{MAX_PLAYERS})", value='\n'.join([f'• **{player}**' for player in self.game.players]), inline=False)
         return embed
     
@@ -512,12 +512,12 @@ class ClassicGame:
     def remove_player(self, player: Player) -> None:
         self.players.remove(player)
         
-    def get_player_by_id(self, player_id: Union[int, str]) -> Player:
+    def get_player_by_id(self, player_id: Union[int, str]) -> Optional[Player]:
         player_id = str(player_id)
         for player in self.players:
             if str(player.id) == player_id:
                 return player
-        raise ValueError(f'Player {player_id} not found')
+        return None
     
     def fill_players(self) -> None:
         names = CPU_NAMES.copy()
@@ -567,6 +567,8 @@ class ClassicGame:
     
     def add_vote(self, player: Player, voted_player_id: str) -> bool:
         voted = self.get_player_by_id(voted_player_id)
+        if not voted:
+            return False
         if voted.id == player.id:
             return False # On ne peut pas voter pour soi-même
         if not voted_player_id in self.votes:
@@ -661,7 +663,7 @@ class ClassicGame:
             
         for player in self.players:
             player.status = 'idle'
-        await asyncio.sleep(4)
+        await asyncio.sleep(5)
         
         # Vote de la meilleure carte blanche
         self.fetch_round_cards()
@@ -696,7 +698,7 @@ class ClassicGame:
             
         for player in self.players:
             player.status = 'idle'
-        await asyncio.sleep(4)
+        await asyncio.sleep(5)
         
         # Annonce du gagnant du round
         votes = self.fetch_votes()
@@ -715,9 +717,9 @@ class ClassicGame:
         await self.channel.send(embed=em, view=ExportBlackCardsView(self))
         
         if self.round < self.rounds:
-            await asyncio.sleep(12)
+            await asyncio.sleep(14)
         else:
-            await asyncio.sleep(6)
+            await asyncio.sleep(8)
     
     async def end_game(self) -> None:
         await self.channel.send("**————— Fin de la partie —————**")
