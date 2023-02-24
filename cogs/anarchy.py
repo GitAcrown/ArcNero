@@ -51,7 +51,7 @@ END_CARD_TEXT = [
 
 MAX_PLAYERS = 8
 MINIMAL_HUMAN_PLAYERS = 2
-FILL_PLAYERS_UNTIL = 5
+FILL_PLAYERS_UNTIL = 4
 HAND_SIZE = 6
 WINNER_POINTS = 3
 VOTED_POINTS = 1
@@ -59,7 +59,7 @@ TIMEOUTS = {
     'register': 60,
     'choose_cards': 60,
     'select_cardpacks': 30,
-    'play_round': 120,
+    'play_round': 90,
     'vote_round': 60,
     'export_black_cards': 30
 }
