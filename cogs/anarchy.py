@@ -923,7 +923,17 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         em.description = pretty.codeblock(tabulate(scoreboard, headers=['Joueur', 'Score']))
         em.set_footer(text=f"Top {top} • Chaque partie gagnée rapporte 1 point")
         await interaction.response.send_message(embed=em)
-            
+        
+    @app_commands.command(name="blackcard")
+    async def custom_black_card(self, interaction: discord.Interaction, text: str):
+        """Créer une carte noire personnalisée
+
+        :param text: Texte de la carte noire
+        """
+        if len(text) > 200:
+            return await interaction.response.send_message("**Erreur ·** La carte noire ne peut pas dépasser 200 caractères", ephemeral=True)
+        bc = BlackCard(text)
+        await interaction.response.send_message(file=bc.image)
             
 async def setup(bot: commands.Bot):
     await bot.add_cog(Anarchy(bot))
