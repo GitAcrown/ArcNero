@@ -925,7 +925,7 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         await interaction.response.send_message(embed=em)
         
     @app_commands.command(name="blackcard")
-    async def custom_black_card(self, interaction: discord.Interaction, text: str, vertical: bool = False):
+    async def custom_black_card(self, interaction: discord.Interaction, text: str, vertical: bool = True):
         """Créer une carte noire personnalisée
 
         :param text: Texte de la carte noire
