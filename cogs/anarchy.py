@@ -51,12 +51,12 @@ END_CARD_TEXT = [
 
 MAX_PLAYERS = 8
 MINIMAL_HUMAN_PLAYERS = 2
-FILL_PLAYERS_UNTIL = 4
+FILL_PLAYERS_UNTIL = 5
 HAND_SIZE = 6
 WINNER_POINTS = 3
 VOTED_POINTS = 1
 TIMEOUTS = {
-    'register': 45,
+    'register': 60,
     'choose_cards': 60,
     'select_cardpacks': 30,
     'play_round': 120,
@@ -127,7 +127,7 @@ class RegisterPlayersView(discord.ui.View):
         elif len(self.game.players) < FILL_PLAYERS_UNTIL:
             self.game.fill_players()
             embed = self.get_embed(starting=True)
-            embed.set_footer(text="🤖 Des IA ont été ajoutées à la partie pour compléter le nombre de joueurs")
+            embed.set_footer(text="🤖 Des IA ont été ajoutées à la partie pour atteindre {FILL_PLAYERS_UNTIL} joueurs\nLa partie sera enregistrée dans le but d'améliorer les CPU")
             await self.message.edit(embed=embed, view=None)
         self.stop()
         
@@ -240,8 +240,7 @@ class VoteBestCardsSelect(discord.ui.Select):
             edited = True
             self.game.clear_player_vote(selfplayer)
         if not self.game.add_vote(selfplayer, self.values[0]):
-            await interaction.response.send_message(f"**Erreur ·** Vous ne pouvez pas voter pour votre propre proposition.", ephemeral=True, delete_after=10)
-            return
+            return await interaction.response.send_message(f"**Erreur ·** Vous ne pouvez pas voter pour votre propre proposition.", ephemeral=True, delete_after=10)
         
         cards = self.game.round_white_cards[self.values[0]]
         for c in cards:
@@ -663,10 +662,11 @@ class ClassicGame:
             
         for player in self.players:
             player.status = 'idle'
-        await asyncio.sleep(5)
+        await asyncio.sleep(4.5)
         
         # Vote de la meilleure carte blanche
         self.fetch_round_cards()
+        await asyncio.sleep(1)
         self.votes = {}
         self.voters = []
         self.white_cards_human = {}
@@ -917,7 +917,8 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         if not data:
             return await interaction.response.send_message("**Erreur ·** Aucun joueur humain n'a encore remporté une partie à Anarchy", ephemeral=True)
         
-        scoreboard = [(guild.get_member(user_id), score) for user_id, score in data][:top]
+        
+        scoreboard = [(guild.get_member(user_id).name if guild.get_member(user_id) else user_id, score) for user_id, score in data][:top] #type: ignore
         em = discord.Embed(title="**Anarchy ·** Scoreboard", color=discord.Color.blurple())
         em.description = pretty.codeblock(tabulate(scoreboard, headers=['Joueur', 'Score']))
         em.set_footer(text=f"Top {top} • Chaque partie gagnée rapporte 1 point")
