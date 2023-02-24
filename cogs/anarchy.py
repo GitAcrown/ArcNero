@@ -888,7 +888,7 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         if any([session.channel == channel for session in self.sessions]):
             return await interaction.response.send_message('Une partie est déjà en cours dans ce salon', ephemeral=True)
 
-        session = ClassicGame(self, channel, rounds, author)
+        session = ClassicGame(self, channel, rounds, author) #type: ignore
         self.sessions.append(session)
         
         # Sélection des packs de cartes
@@ -900,7 +900,7 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         session.add_player(HumanPlayer(author))
         if not await session.register_players():
             self.sessions.remove(session)
-            return await interaction.followup.send("**Partie annulée ·** Il n'y a pas assez de joueurs pour commencer la partie", ephemeral=True)
+            return await interaction.followup.send("**Partie annulée ·** Il n'y a pas assez de joueurs pour commencer la partie")
         
         # Lancement de la partie
         await session.start_game()
