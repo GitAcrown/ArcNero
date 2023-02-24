@@ -873,6 +873,23 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         img.paste(userpfp, (30, 32), userpfp)
         img = self.__add_corners(img, 30)
         return img
+    
+    def _generate_white_card(self, text: str, horizontal: bool = True):
+        path = get_package_path('anarchy')
+        imgdim = (750, 500) if horizontal else (500, 750)
+        img = Image.new('RGB', imgdim, 'white')
+        d = ImageDraw.Draw(img)
+        font = ImageFont.truetype(f'{path}/assets/Coolvetica.otf', 40, encoding='unic')
+        wrapped = textwrap.wrap(text, width=39 if horizontal else 24)
+        
+        d.text((34, 30), '\n'.join(wrapped), font=font, fill='black')
+        
+        logo_font = ImageFont.truetype(f'{path}/assets/Coolvetica.otf', 30, encoding='unic')
+        d.text((imgdim[0] - 60, imgdim[1] - 70), '*', font=font, fill='black')
+        d.text((imgdim[0] - 165, imgdim[1] - 70), 'Anarchy', font=logo_font, fill='black')
+        
+        img = self.__add_corners(img, 30)
+        return img
             
     @app_commands.command(name="start")
     @app_commands.guild_only()
@@ -926,23 +943,33 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         em.set_footer(text=f"Top {top} • Chaque partie gagnée rapporte 1 point")
         await interaction.response.send_message(embed=em)
         
-    @app_commands.command(name="blackcard")
-    async def custom_black_card(self, interaction: discord.Interaction, text: str, vertical: bool = True):
-        """Créer une carte noire personnalisée
+    @app_commands.command(name="customcard")
+    async def custom_game_card(self, interaction: discord.Interaction, text: str, color: str, vertical: bool = True):
+        """Créer une carte noire/blanche personnalisée
 
-        :param text: Texte de la carte noire
-        :param vertical: Si la carte noire doit être affichée verticalement
+        :param text: Texte de la carte
+        :param color: Couleur de la carte (noire/blanche)
+        :param vertical: Si la carte doit être affichée verticalement
         """
+        if color not in ['black', 'white']:
+            return await interaction.response.send_message("**Erreur ·** La couleur de la carte doit être `black` ou `white`", ephemeral=True)
         if '_' in text:
             text = text.replace('_', '________', 3)
         if len(text) > 200:
-            return await interaction.response.send_message("**Erreur ·** La carte noire ne peut pas dépasser 200 caractères", ephemeral=True)
-        bc = BlackCard(text)
-        image = bc._generate_image(text, not vertical)
+            return await interaction.response.send_message("**Erreur ·** Le texte de la carte ne peut pas dépasser 200 caractères", ephemeral=True)
+        if color == 'black':
+            bc = BlackCard(text)
+            image = bc._generate_image(text, not vertical)
+        else:
+            image = self._generate_white_card(text, not vertical)
         with BytesIO() as f:
             image.save(f, format='PNG')
             f.seek(0)
-            await interaction.response.send_message(file=discord.File(f, 'blackcard.png', description=text))
+            await interaction.response.send_message(file=discord.File(f, 'card.png', description=text))
+            
+    @custom_game_card.autocomplete('color')
+    async def autocomplete_callback(self, interaction: discord.Interaction, current: str):
+        return [app_commands.Choice(name='black', value='black'), app_commands.Choice(name='white', value='white')]
             
 async def setup(bot: commands.Bot):
     await bot.add_cog(Anarchy(bot))
