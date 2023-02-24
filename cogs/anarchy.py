@@ -933,6 +933,8 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         :param text: Texte de la carte noire
         :param vertical: Si la carte noire doit être affichée verticalement
         """
+        if '_' in text:
+            text = text.replace('_', '________', 3)
         if len(text) > 200:
             return await interaction.response.send_message("**Erreur ·** La carte noire ne peut pas dépasser 200 caractères", ephemeral=True)
         bc = BlackCard(text)
