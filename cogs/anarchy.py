@@ -636,7 +636,7 @@ class ClassicGame:
     async def start_round(self) -> None:
         # Initialisation du round
         self.fill_players_hands()
-        await self.channel.send(f"**————— Round {self.round} —————**\nVos cartes blanches ont été distribuées.")
+        await self.channel.send(f"**~~      ~~ Round {self.round} ~~      ~~**\nVos cartes blanches ont été distribuées.")
         
         # Choix de la carte noire
         self.round_black_card = self.draw_black_card()
@@ -671,7 +671,7 @@ class ClassicGame:
         self.voters = []
         self.white_cards_human = {}
         self.status = 'vote_round'
-        await self.channel.send(f"**——— Ouverture des votes ———**")
+        await self.channel.send(f"**~~    ~~ Ouverture des votes ~~    ~~**")
         embed = discord.Embed(description=f"***{self.round_black_card.wrap_blanks()}***", color=discord.Color.blurple())
         embed.set_image(url=choosemsg.attachments[0].url)
         embed.set_footer(text=f"Round {self.round} · Votez pour la carte blanche qui vous semble la plus drôle !")
@@ -722,7 +722,7 @@ class ClassicGame:
             await asyncio.sleep(8)
     
     async def end_game(self) -> None:
-        await self.channel.send("**————— Fin de la partie —————**")
+        await self.channel.send("**~~      ~~ Fin de la partie ~~      ~~**")
         await asyncio.sleep(1.5)
         
         winners = [player for player in self.players if player.score == max([p.score for p in self.players])]
