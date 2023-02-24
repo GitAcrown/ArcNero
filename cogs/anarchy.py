@@ -469,7 +469,7 @@ class BlackCard:
 class ClassicGame:
     """Logique de jeu pour une partie de Anarchy classique"""
     
-    def __init__(self, cog: 'Anarchy', channel: discord.TextChannel, rounds: int, author: Union[discord.User, discord.Member]) -> None:
+    def __init__(self, cog: 'Anarchy', channel: Union[discord.TextChannel, discord.Thread], rounds: int, author: Union[discord.User, discord.Member]) -> None:
         self._cog = cog
         self.channel = channel
         self.rounds = rounds
@@ -881,7 +881,7 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         """
         channel = interaction.channel
         author = interaction.user
-        if not isinstance(channel, discord.TextChannel):
+        if channel.type not in [discord.ChannelType.text, discord.ChannelType.public_thread, discord.ChannelType.public_thread]: #type: ignore
             return await interaction.response.send_message('Cette commande ne peut être utilisée que dans un salon de texte', ephemeral=True)
         if any([session.channel == channel for session in self.sessions]):
             return await interaction.response.send_message('Une partie est déjà en cours dans ce salon', ephemeral=True)
