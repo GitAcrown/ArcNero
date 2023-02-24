@@ -435,7 +435,7 @@ class BlackCard:
         im.putalpha(alpha)
         return im
 
-    def __generate_image(self, text: str, horizontal: bool = True):
+    def _generate_image(self, text: str, horizontal: bool = True):
         path = get_package_path('anarchy')
         imgdim = (750, 500) if horizontal else (500, 750)
         img = Image.new('RGB', imgdim, 'black')
@@ -455,14 +455,14 @@ class BlackCard:
     @property
     def image(self) -> discord.File:
         with BytesIO() as image_binary:
-            self.__generate_image(self.__str__()).save(image_binary, 'PNG')
+            self._generate_image(self.__str__()).save(image_binary, 'PNG')
             image_binary.seek(0)
             return discord.File(fp=image_binary, filename='black_card.png', description=self.__str__())
     
     def fill_image(self, cards: List[str]) -> discord.File:
         """Créer une image de la carte noire remplie avec les cartes blanches voulues"""
         with BytesIO() as image_binary:
-            self.__generate_image(self.fill(cards)).save(image_binary, 'PNG')
+            self._generate_image(self.fill(cards)).save(image_binary, 'PNG')
             image_binary.seek(0)
             return discord.File(fp=image_binary, filename='black_card.png', description=self.__str__())
 
@@ -925,15 +925,20 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         await interaction.response.send_message(embed=em)
         
     @app_commands.command(name="blackcard")
-    async def custom_black_card(self, interaction: discord.Interaction, text: str):
+    async def custom_black_card(self, interaction: discord.Interaction, text: str, vertical: bool = False):
         """Créer une carte noire personnalisée
 
         :param text: Texte de la carte noire
+        :param vertical: Si la carte noire doit être affichée verticalement
         """
         if len(text) > 200:
             return await interaction.response.send_message("**Erreur ·** La carte noire ne peut pas dépasser 200 caractères", ephemeral=True)
         bc = BlackCard(text)
-        await interaction.response.send_message(file=bc.image)
+        image = bc._generate_image(text, not vertical)
+        with BytesIO() as f:
+            image.save(f, format='PNG')
+            f.seek(0)
+            await interaction.response.send_message(file=discord.File(f, 'blackcard.png', description=text))
             
 async def setup(bot: commands.Bot):
     await bot.add_cog(Anarchy(bot))
