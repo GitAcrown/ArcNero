@@ -56,11 +56,11 @@ HAND_SIZE = 6
 WINNER_POINTS = 3
 VOTED_POINTS = 1
 TIMEOUTS = {
-    'register': 60,
+    'register': 30,
     'choose_cards': 60,
-    'select_cardpacks': 60,
+    'select_cardpacks': 20,
     'play_round': 120,
-    'vote_round': 120,
+    'vote_round': 60,
     'export_black_cards': 30
 }
 
@@ -86,7 +86,7 @@ class ChoosePacksSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction) -> None:
         packs = [pack for pack in self.packs if pack.id in self.values]
         self.game._load_cards(packs)
-        pack_txt = '\n'.join([f'• **{pack.name}** `[{len(pack.black_cards)}b | {len(pack.white_cards)}w]`' for pack in packs])
+        pack_txt = '\n'.join([f'• **{pack.name}** `[{len(pack.black_cards)}B| {len(pack.white_cards)}W]`' for pack in packs])
         await interaction.response.send_message(f"**Extensions ajoutées à la partie ·** Packs de cartes chargés :\n{pack_txt}", ephemeral=True, delete_after=10)
     
 # Enregistrement des joueurs
@@ -97,19 +97,23 @@ class RegisterPlayersView(discord.ui.View):
         self.message : discord.Message = None #type: ignore
         
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id not in self.game.players:
+        selfplayer = HumanPlayer(interaction.user)
+        if selfplayer not in self.game.players:
             return True
         await interaction.response.send_message("**Erreur ·** Vous êtes déjà inscrit à la partie", ephemeral=True, delete_after=10)
         return False
     
-    def get_embed(self) -> discord.Embed:
+    def get_embed(self, starting: bool = False) -> discord.Embed:
+        desc = f"**{self.game.author.name}** vous invite à jouer à Anarchy !\nRejoignez la partie en cliquant sur le bouton ci-dessous ({TIMEOUTS['register']}s)"
+        if starting:
+            desc = f"**Inscriptions terminées**\nLa partie va bientôt commencer !"
         embed = discord.Embed(
             title="**Anarchy ·** Inscription à la partie",
-            description=f"**{self.game.author.name}** vous invite à jouer à Anarchy !\nRejoignez la partie en cliquant sur le bouton ci-dessous",
+            description=desc,
             color=discord.Color.blurple()
         )
-        embed.add_field(name="Extensions utilisées", value='\n'.join([f'• **{pack.name}** `[{len(pack.black_cards)}b | {len(pack.white_cards)}w]`' for pack in self.game.packs]))
-        embed.add_field(name="Nombre de rounds", value=pretty.codeblock(str(self.game.rounds), lang='fix'))
+        embed.add_field(name="Extensions utilisées", value='\n'.join([f'• **{pack.name}** `[{len(pack.black_cards)}B|{len(pack.white_cards)}W]`' for pack in self.game.packs]))
+        embed.add_field(name="Nombre de rounds", value=f"**{self.game.rounds}** (Env. {int(self.game.rounds * 2.5)} min.)")
         embed.add_field(name=f"Joueurs inscrits ({len(self.game.players)}/{MAX_PLAYERS})", value='\n'.join([f'• **{player}**' for player in self.game.players]), inline=False)
         return embed
     
@@ -122,7 +126,7 @@ class RegisterPlayersView(discord.ui.View):
             await self.message.edit(view=None)
         elif len(self.game.players) < FILL_PLAYERS_UNTIL:
             self.game.fill_players()
-            embed = self.get_embed()
+            embed = self.get_embed(starting=True)
             embed.set_footer(text="🤖 Des IA ont été ajoutées à la partie pour compléter le nombre de joueurs")
             await self.message.edit(embed=embed, view=None)
         self.stop()
@@ -135,6 +139,7 @@ class RegisterPlayersView(discord.ui.View):
             return
         player = HumanPlayer(interaction.user)
         self.game.add_player(player)
+        await self.message.edit(embed=self.get_embed())
         await interaction.response.send_message(f"**Anarchy ·** Vous avez rejoint la partie", ephemeral=True, delete_after=20)
         
 # Choix des cartes à jouer
@@ -159,9 +164,9 @@ class ChooseCardsView(discord.ui.View):
 
     async def start(self) -> None:
         image = self.game.round_black_card.image
-        self.message = await self.game.channel.send(content="**Carte noire ·** Cliquez sur le bouton ci-dessous pour jouer ce round.", file=image, view=self)
+        self.message = await self.game.channel.send(content="**Voici la carte noire de ce round ·** Cliquez sur le bouton ci-dessous pour proposer vos cartes.\n_ _", file=image, view=self)
         
-    @discord.ui.button(label='Jouer', emoji='<:iconCards:1078392002086969344>', style=discord.ButtonStyle.green)
+    @discord.ui.button(label='Proposer ses cartes', emoji='<:iconCards:1078392002086969344>', style=discord.ButtonStyle.green)
     async def play_round(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         """Jouer le round"""
         player = self.game.get_player_by_id(interaction.user.id)
@@ -172,6 +177,8 @@ class ChooseCardsView(discord.ui.View):
         view.add_item(select)
         player.status = 'choosing'
         await interaction.response.send_message(f"**Anarchy ·** Choisissez vos cartes à jouer pour compléter les trous de la carte noire.", ephemeral=True, view=view)
+        await view.wait()
+        await interaction.edit_original_response(view=None)
         
 # Element de sélection des cartes à jouer
 class ChooseWhiteCardsSelect(discord.ui.Select):
@@ -188,20 +195,22 @@ class ChooseWhiteCardsSelect(discord.ui.Select):
         self.__fill_options()
         
     def __fill_options(self) -> None:
-        black_card = self.game.round_black_card
         for card in self.player.hand:
-            self.add_option(label=f"{card}.", value=card, description=black_card.fill(card)[:100])
+            self.add_option(label=f"{card}", value=card)
     
     async def callback(self, interaction: discord.Interaction) -> None:
+        if self.game.status != 'choose_cards':
+            return await interaction.response.send_message("**Erreur ·** Vous ne pouvez plus jouer de cartes pour le moment", ephemeral=True, delete_after=10)
         edited = False
         if self.player.played_cards:
             self.player.cancel_play()
             edited = True
         self.player.play(self.values)
+        bc_demo = self.game.round_black_card.fill(self.values)
         if edited:
-            await interaction.response.send_message(f"**Carte(s) modifiée(s) ·** Vous avez joué {' '.join((f'`{value}`' for value in self.values))}.", ephemeral=True)
+            await interaction.response.send_message(f"**Carte(s) modifiée(s) ·** Vous avez joué {' '.join((f'`{value}`' for value in self.values))}.\n\n✱ **`{bc_demo}`**", ephemeral=True, delete_after=20)
         else:
-            await interaction.response.send_message(f"**Carte(s) jouée(s) ·** Vous avez joué {' '.join((f'`{value}`' for value in self.values))}.", ephemeral=True)
+            await interaction.response.send_message(f"**Carte(s) jouée(s) ·** Vous avez joué {' '.join((f'`{value}`' for value in self.values))}.\n\n✱ **`{bc_demo}`**", ephemeral=True, delete_after=20)
         
 # Vote pour la meilleure carte
 class VoteBestCardsSelect(discord.ui.Select):
@@ -218,18 +227,20 @@ class VoteBestCardsSelect(discord.ui.Select):
     def __fill_options(self) -> None:
         black_card = self.game.round_black_card
         for player_id, cards in self.game.round_white_cards.items():
-            self.add_option(label=" | ".join(cards), value=player_id, description=black_card.fill(cards)[:100])
+            self.add_option(label=" | ".join(cards), value=player_id, description=pretty.troncate_text(black_card.fill(cards), 100))
     
     async def callback(self, interaction: discord.Interaction) -> None:
         selfplayer = self.game.get_player_by_id(interaction.user.id)
         if not selfplayer:
-            return
+            return await interaction.response.send_message("**Erreur ·** Vous ne jouez pas à la partie en cours", ephemeral=True, delete_after=10)
+        if self.game.status != 'vote_round':
+            return await interaction.response.send_message("**Erreur ·** Vous ne pouvez plus voter pour le moment", ephemeral=True, delete_after=10)
         edited = False
         if selfplayer in [player for pid in self.game.votes for player in self.game.votes[pid]]:
             edited = True
             self.game.clear_player_vote(selfplayer)
         if not self.game.add_vote(selfplayer, self.values[0]):
-            await interaction.response.send_message(f"**Erreur ·** Vous ne pouvez pas voter pour votre propre proposition.", ephemeral=True, delete_after=15)
+            await interaction.response.send_message(f"**Erreur ·** Vous ne pouvez pas voter pour votre propre proposition.", ephemeral=True, delete_after=10)
             return
         
         cards = self.game.round_white_cards[self.values[0]]
@@ -237,9 +248,9 @@ class VoteBestCardsSelect(discord.ui.Select):
             self.game.white_cards_human[c] = self.game.white_cards_human.get(c, 0) + 1
             
         if edited:
-            await interaction.response.send_message(f"**Vote modifié ·** Vous avez voté pour {' '.join(f'`{c}`' for c in cards)}.", ephemeral=True)
+            await interaction.response.send_message(f"**Vote modifié ·** Vous avez voté pour {' '.join(f'`{c}`' for c in cards)}.", ephemeral=True, delete_after=20)
         else:
-            await interaction.response.send_message(f"**Vote enregistré ·** Vous avez voté pour {' '.join(f'`{c}`' for c in cards)}.", ephemeral=True)
+            await interaction.response.send_message(f"**Vote enregistré ·** Vous avez voté pour {' '.join(f'`{c}`' for c in cards)}.", ephemeral=True, delete_after=20)
 
 # Boutons d'export des cartes noires complétées
 class ExportBlackCardsView(discord.ui.View):
@@ -258,7 +269,7 @@ class ExportBlackCardsView(discord.ui.View):
             files.append(file)
         return files
         
-    @discord.ui.button(label='Exporter les cartes', emoji='<:iconCardsBlack:1078507025295736952>', style=discord.ButtonStyle.gray)
+    @discord.ui.button(label='Exporter les cartes noires', style=discord.ButtonStyle.gray)
     async def export_black_cards(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         """Obtenir les cartes noires complétées"""
         await interaction.response.send_message(f"**Exportation des cartes noires (Round {self.game.round}) ·** Voici les cartes noires complétées avec les propositions des gagnants.", 
@@ -299,8 +310,16 @@ class Player:
         self.played_cards = []
         self.status = 'idle'
         
+    def __eq__(self, __o: object) -> bool:
+        if isinstance(__o, Player):
+            return self.id == __o.id
+        return False
+        
     def __len__(self) -> int:
         return len(self.hand)
+    
+    def __hash__(self) -> int:
+        return hash(self.id)
     
     def draw(self, cards: List[str]) -> None:
         """Piocher des cartes"""
@@ -378,7 +397,7 @@ class CardsPack:
         self.white_cards = pack_data['white_cards']
         
     def __str__(self) -> str:
-        return f"{self.name} [{len(self.black_cards)}B|{len(self.white_cards)}]"
+        return f"{self.name} `[{len(self.black_cards)}B|{len(self.white_cards)}W]`"
     
 class BlackCard:
     def __init__(self, text: str) -> None:
@@ -393,10 +412,16 @@ class BlackCard:
             return self.text == __o.text
         return False
     
+    def __hash__(self) -> int:
+        return hash(self.text)
+    
     def fill(self, cards: List[str]) -> str:
         if len(cards) != self.blanks:
             raise ValueError(f'Expected {self.blanks} cards, got {len(cards)}')
-        return self.text.replace('_', '{}').format(*cards)
+        return self.text.replace('_', '{}').format(*cards).capitalize()
+    
+    def wrap_blanks(self) -> str:
+        return self.text.replace('_', "`________`")
     
     def __add_corners(self, im, rad):
         circle = Image.new('L', (rad * 2, rad * 2), 0)
@@ -467,12 +492,10 @@ class ClassicGame:
         self.used_white_cards : List[str] = []
         
         self.votes : Dict[str, List[Player]] = {}
+        self.voters : List[Player] = []
         self.white_cards_human : Dict[str, int] = {}
         
-        self._cog.sessions.append(self)
-        
-    def __del__(self):
-        self._cog.sessions.remove(self)
+        self.status = 'register'
     
     def _load_cards(self, packs: List[CardsPack]) -> None:
         self.packs = packs
@@ -524,8 +547,8 @@ class ClassicGame:
     
     def fill_players_hands(self) -> None:
         for player in self.players:
-            while len(player.hand) < HAND_SIZE:
-                player.hand.append(self.draw_white_card())
+            pcards = [self.draw_white_card() for _ in range(HAND_SIZE - len(player.hand))]
+            player.draw(pcards)
                 
     def cpu_submit_cards(self) -> None:
         for player in self.players:
@@ -546,18 +569,23 @@ class ClassicGame:
         voted = self.get_player_by_id(voted_player_id)
         if voted.id == player.id:
             return False # On ne peut pas voter pour soi-même
+        if not voted_player_id in self.votes:
+            self.votes[voted_player_id] = []
         self.votes[voted_player_id].append(player)
+        self.voters.append(player)
         return True
     
     def clear_player_vote(self, player: Player) -> None:
         for player_id, voters in self.votes.items():
             if player in voters:
                 self.votes[player_id].remove(player)
+                self.voters.remove(player)
                 
     def cpu_votes(self) -> None:
         for player in self.players:
             if isinstance(player, BotPlayer):
-                player.vote(self.round_white_cards)
+                while self.add_vote(player, player.vote(self.round_white_cards)) == False:
+                    pass
                 
     def fetch_votes(self) -> Dict[Player, int]:
         votes = {}
@@ -576,10 +604,13 @@ class ClassicGame:
     async def select_cardpacks(self, original_interaction: discord.Interaction) -> bool:
         view = discord.ui.View(timeout=TIMEOUTS['select_cardpacks'])
         view.add_item(ChoosePacksSelect(self, self._cog.Packs))
-        await original_interaction.followup.send('Choisissez les packs de cartes à utiliser pour cette partie', view=view, ephemeral=True)
-        await view.wait()
+        await original_interaction.response.send_message('Choisissez les packs de cartes à utiliser pour cette partie', view=view, ephemeral=True)
+        while not self.black_cards and not self.white_cards and not view.is_finished():
+            await asyncio.sleep(0.5)
         if not self.black_cards and not self.white_cards:
             return False
+        await original_interaction.edit_original_response(view=None)
+        view.stop()
         return True
     
     async def register_players(self) -> bool:
@@ -594,7 +625,7 @@ class ClassicGame:
     
     async def start_game(self) -> bool:
         await self.channel.send("**Anarchy ·** La partie va bientôt commencer !", delete_after=20)
-        await asyncio.sleep(2)
+        await asyncio.sleep(3)
         while self.round < self.rounds:
             self.round += 1
             await self.start_round()
@@ -608,9 +639,10 @@ class ClassicGame:
         
         # Choix de la carte noire
         self.round_black_card = self.draw_black_card()
-        await asyncio.sleep(1)
+        await asyncio.sleep(2.5)
         
         # Affichage de la carte noire et proposition des cartes blanches
+        self.status = 'choose_cards'
         choosecardsview = ChooseCardsView(self)
         await choosecardsview.start()
         self.cpu_submit_cards() # On fait jouer les bots
@@ -619,6 +651,7 @@ class ClassicGame:
             await asyncio.sleep(0.5)
         choosemsg = choosecardsview.message
         choosecardsview.stop()
+        self.status = 'idle'
         await choosemsg.edit(view=None)
         
         if len([p for p in self.players if p.played_cards]) < len(self.players):
@@ -628,13 +661,16 @@ class ClassicGame:
             
         for player in self.players:
             player.status = 'idle'
-        await asyncio.sleep(2)
+        await asyncio.sleep(4)
         
         # Vote de la meilleure carte blanche
         self.fetch_round_cards()
+        self.votes = {}
+        self.voters = []
         self.white_cards_human = {}
+        self.status = 'vote_round'
         await self.channel.send(f"**——— Ouverture des votes ———**")
-        embed = discord.Embed(description=f"***{self.round_black_card}***", color=discord.Color.blurple())
+        embed = discord.Embed(description=f"***{self.round_black_card.wrap_blanks()}***", color=discord.Color.blurple())
         embed.set_image(url=choosemsg.attachments[0].url)
         embed.set_footer(text=f"Round {self.round} · Votez pour la carte blanche qui vous semble la plus drôle !")
         voteview = discord.ui.View(timeout=None)
@@ -642,13 +678,13 @@ class ClassicGame:
         votemsg = await self.channel.send(embed=embed, view=voteview)
         self.cpu_votes() # On fait voter les bots
         timeout = time.time() + TIMEOUTS['vote_round']
-        while len(self.votes) < len(self.players) and time.time() < timeout:
+        while len(self.voters) < len(self.players) and time.time() < timeout:
             await asyncio.sleep(0.5)
+        self.status = 'idle'
         voteview.stop()
         await votemsg.edit(view=None)
-        
-        all_voters = [voter for voters in self.votes.values() for voter in voters]
-        if len(self.votes) < len(self.players):
+        all_voters = self.voters.copy()
+        if len(self.voters) < len(self.players):
             await self.channel.send(f"**Round {self.round} ·** Temps écoulé ! Les joueurs n'ayant pas voté perdent un point.")
             for player in self.players:
                 if player not in all_voters:
@@ -660,7 +696,7 @@ class ClassicGame:
             
         for player in self.players:
             player.status = 'idle'
-        await asyncio.sleep(2)
+        await asyncio.sleep(4)
         
         # Annonce du gagnant du round
         votes = self.fetch_votes()
@@ -674,10 +710,14 @@ class ClassicGame:
         em = discord.Embed(title=f"**Round {self.round} ·** Résultats", color=discord.Color.blurple())
         winners_txt = "\n".join([f"**{player}** · {self.round_black_card.fill(self.round_white_cards[str(player.id)])}" for player in winners])
         em.add_field(name=f"Gagnant(s) ({max(votes.values())} votes)", value=winners_txt)
-        em.add_field(name="Scores", value="\n".join([f"**{player}** · {player.score} points" for player in self.players]), inline=False)
+        em.add_field(name="Scores", value="\n".join([f"• **{player}** · {player.score} points" for player in self.players]), inline=False)
         em.set_footer(text=f"Les gagnants ont reçu 3 points et ceux ayant eu au moins un vote ont reçu 1 point.")
         await self.channel.send(embed=em, view=ExportBlackCardsView(self))
-        await asyncio.sleep(7)
+        
+        if self.round < self.rounds:
+            await asyncio.sleep(12)
+        else:
+            await asyncio.sleep(6)
     
     async def end_game(self) -> None:
         await self.channel.send("**————— Fin de la partie —————**")
@@ -698,12 +738,14 @@ class ClassicGame:
                 winner_img = await self._cog.generate_end_card_img(userpfp, textcard)
                 winner_img.save(image_binary, 'PNG')
                 image_binary.seek(0)
-                await self.channel.send(f"**Anarchy ·** La partie est terminée !\nFélicitations à {winners[0]} pour sa victoire !", file=discord.File(fp=image_binary, filename='winner.png', description=textcard))
+                await self.channel.send(f"**Anarchy ·** La partie est terminée !\nFélicitations à **{winners[0]}** pour sa victoire !", file=discord.File(fp=image_binary, filename='winner.png', description=textcard))
         else:
-            await self.channel.send(f"**Anarchy ·** La partie est terminée !\nFélicitations à {', '.join([str(w) for w in winners])} pour leur victoire !")
+            await self.channel.send(f"**Anarchy ·** La partie est terminée !\nFélicitations à **{', '.join([str(w) for w in winners])}** pour leur victoire !")
         
         for winner in [w for w in winners if isinstance(w, HumanPlayer)]:
             self._cog.update_player_score(self.channel.guild, winner.user)
+            
+        self.training.save()
         
         
 class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Cards Against Humanity"):
@@ -843,21 +885,22 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
             return await interaction.response.send_message('Une partie est déjà en cours dans ce salon', ephemeral=True)
 
         session = ClassicGame(self, channel, rounds, author)
+        self.sessions.append(session)
         
         # Sélection des packs de cartes
         if not await session.select_cardpacks(interaction):
-            del session
-            return await interaction.response.send_message("**Partie annulée ·** Aucun pack de cartes n'a été sélectionné", ephemeral=True)
+            self.sessions.remove(session)
+            return await interaction.followup.send("**Partie annulée ·** Aucun pack de cartes n'a été sélectionné", ephemeral=True)
         
         # Enregistrement des joueurs
         session.add_player(HumanPlayer(author))
         if not await session.register_players():
-            del session
-            return await interaction.response.send_message("**Partie annulée ·** Il n'y a pas assez de joueurs pour commencer la partie", ephemeral=True)
+            self.sessions.remove(session)
+            return await interaction.followup.send("**Partie annulée ·** Il n'y a pas assez de joueurs pour commencer la partie", ephemeral=True)
         
         # Lancement de la partie
         await session.start_game()
-        del session
+        self.sessions.remove(session)
         
     @app_commands.command(name="scoreboard")
     @app_commands.guild_only()
@@ -870,7 +913,7 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
             return await interaction.response.send_message('Cette commande ne peut être utilisée que dans un serveur', ephemeral=True)
         data = self.get_players_scores(guild) 
         if not data:
-            return await interaction.response.send_message("**Erreur ·** Aucun joueur n'a encore joué à Anarchy", ephemeral=True)
+            return await interaction.response.send_message("**Erreur ·** Aucun joueur humain n'a encore remporté une partie à Anarchy", ephemeral=True)
         
         scoreboard = [(guild.get_member(user_id), score) for user_id, score in data][:top]
         em = discord.Embed(title="**Anarchy ·** Scoreboard", color=discord.Color.blurple())
