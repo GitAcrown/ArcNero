@@ -56,9 +56,9 @@ HAND_SIZE = 6
 WINNER_POINTS = 3
 VOTED_POINTS = 1
 TIMEOUTS = {
-    'register': 30,
+    'register': 45,
     'choose_cards': 60,
-    'select_cardpacks': 20,
+    'select_cardpacks': 30,
     'play_round': 120,
     'vote_round': 60,
     'export_black_cards': 30
