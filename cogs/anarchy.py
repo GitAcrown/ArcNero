@@ -466,7 +466,7 @@ class BlackCard:
         d.text((imgdim[0] - 165, imgdim[1] - 70), 'Anarchy', font=logo_font, fill='white')
         
         if footer:
-            d.text((36, imgdim[1] - 70), f'@{footer}', font=logo_font, fill='white')
+            d.text((36, imgdim[1] - 70), f'{footer}', font=logo_font, fill='white')
         
         img = self.__add_corners(img, 30)
         return img
