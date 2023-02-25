@@ -261,10 +261,10 @@ class ExportBlackCardsView(discord.ui.View):
         
     def __get_files(self) -> List[discord.File]:
         black_card = self.game.round_black_card
-        winners_text = [self.game.round_white_cards[str(player.id)] for player in self.game.get_winners()]
+        winners = [(self.game.round_white_cards[str(player.id)], player) for player in self.game.get_winners()]
         files = []
-        for winner_text in winners_text:
-            file = black_card.fill_image(winner_text)
+        for winner_text, player in winners:
+            file = black_card.fill_image(winner_text, footer=f"@{str(player)}")
             files.append(file)
         return files
         
@@ -451,7 +451,7 @@ class BlackCard:
         im.putalpha(alpha)
         return im
 
-    def _generate_image(self, text: str, horizontal: bool = True):
+    def _generate_image(self, text: str, horizontal: bool = True, footer: str = ''):
         path = get_package_path('anarchy')
         imgdim = (750, 500) if horizontal else (500, 750)
         img = Image.new('RGB', imgdim, 'black')
@@ -465,6 +465,9 @@ class BlackCard:
         d.text((imgdim[0] - 60, imgdim[1] - 70), '*', font=font, fill='white')
         d.text((imgdim[0] - 165, imgdim[1] - 70), 'Anarchy', font=logo_font, fill='white')
         
+        if footer:
+            d.text((36, imgdim[1] - 70), f'@{footer}', font=logo_font, fill='white')
+        
         img = self.__add_corners(img, 30)
         return img
     
@@ -475,10 +478,10 @@ class BlackCard:
             image_binary.seek(0)
             return discord.File(fp=image_binary, filename='black_card.png', description=self.__str__())
     
-    def fill_image(self, cards: List[str]) -> discord.File:
+    def fill_image(self, cards: List[str], footer: str = '') -> discord.File:
         """Créer une image de la carte noire remplie avec les cartes blanches voulues"""
         with BytesIO() as image_binary:
-            self._generate_image(self.fill(cards)).save(image_binary, 'PNG')
+            self._generate_image(self.fill(cards), footer=footer).save(image_binary, 'PNG')
             image_binary.seek(0)
             return discord.File(fp=image_binary, filename='black_card.png', description=self.__str__())
 
