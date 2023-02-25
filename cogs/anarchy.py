@@ -385,18 +385,32 @@ class BotPlayer(Player):
 class CardsPack:
     def __init__(self, pack_data: dict) -> None:
         self._data = pack_data
-        self.id = pack_data['id']
-        self.name = pack_data['name']
-        self.description = pack_data['short']
-        self.emoji = pack_data['emoji']
-        self.author = pack_data['author']
+        self.id : str = pack_data['id']
+        self.name : str = pack_data['name']
+        self.description : str = pack_data['short']
+        self.emoji : str = pack_data['emoji']
+        self.author : str = pack_data['author']
         self.last_update = datetime.now().strptime(pack_data['last_update'], '%d-%m-%Y')
+        self.guilds : List[int] = pack_data.get('guilds', [])
         
         self.black_cards = [BlackCard(card) for card in pack_data['black_cards']]
         self.white_cards = pack_data['white_cards']
         
     def __str__(self) -> str:
         return f"{self.name} `[{len(self.black_cards)}B|{len(self.white_cards)}W]`"
+    
+    def __eq__(self, __o: object) -> bool:
+        if isinstance(__o, CardsPack):
+            return self.id == __o.id
+        return False
+     
+    def __hash__(self) -> int:
+        return hash(self.id)
+    
+    def is_available(self, guild: discord.Guild) -> bool:
+        if self.guilds:
+            return guild.id in self.guilds
+        return True
     
 class BlackCard:
     def __init__(self, text: str) -> None:
@@ -603,8 +617,13 @@ class ClassicGame:
     # Vues ===================
     
     async def select_cardpacks(self, original_interaction: discord.Interaction) -> bool:
+        guild = original_interaction.guild
+        if not guild:
+            return False
+        packs = [pack for pack in self._cog.Packs if pack.is_available(guild)]
+        
         view = discord.ui.View(timeout=TIMEOUTS['select_cardpacks'])
-        view.add_item(ChoosePacksSelect(self, self._cog.Packs))
+        view.add_item(ChoosePacksSelect(self, packs))
         await original_interaction.response.send_message('Choisissez les packs de cartes à utiliser pour cette partie', view=view, ephemeral=True)
         while not self.black_cards and not self.white_cards and not view.is_finished():
             await asyncio.sleep(0.5)
@@ -751,6 +770,7 @@ class ClassicGame:
             
         self.training.save()
         
+# COG -------------------------------------------------------------------------------------------------------------------------------
         
 class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Cards Against Humanity"):
     """Jeu inspiré de Cards Against Humanity"""
@@ -890,6 +910,9 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         
         img = self.__add_corners(img, 30)
         return img
+    
+    
+    # Commandes ================================================================
             
     @app_commands.command(name="start")
     @app_commands.guild_only()
@@ -970,6 +993,7 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
     @custom_game_card.autocomplete('color')
     async def autocomplete_callback(self, interaction: discord.Interaction, current: str):
         return [app_commands.Choice(name='black', value='black'), app_commands.Choice(name='white', value='white')]
+            
             
 async def setup(bot: commands.Bot):
     await bot.add_cog(Anarchy(bot))
