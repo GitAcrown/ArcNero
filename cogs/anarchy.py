@@ -47,6 +47,14 @@ END_CARD_TEXT = [
     "{} qui a gagné la partie parce qu'il a le plus gros cul.",
     "A ce jeu, c'est le plus con qui l'emporte, et {} a gagné.",
     "L'humour noir est un art, et {} l'a parfaitement maîtrisé.",
+    "La victoire est à {} ! Je suis fier de lui.",
+    "Même si c'est pas mérité, {} a gagné.",
+    "La partie était nulle, mais {} a gagné et il faut respecter ça.",
+    "Désolé les gars, mais c'est {} qui l'emporte.",
+    "C'est {} qui a gagné la partie, mais on s'en fout.",
+    "Quand on est con, on est con, et {} est le/la plus con(ne).",
+    "Xenophobe, homophobe et raciste, je vous présente {}.",
+    "{} qui gagne c'est du jamais vu, mais c'est arrivé."
 ]
 
 MAX_PLAYERS = 8
