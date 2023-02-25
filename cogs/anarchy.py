@@ -206,11 +206,11 @@ class ChooseWhiteCardsSelect(discord.ui.Select):
             self.player.cancel_play()
             edited = True
         self.player.play(self.values)
-        bc_demo = self.game.round_black_card.fill(self.values)
+        bc_demo = self.game.round_black_card.fill(self.values, with_codeblock=True)
         if edited:
-            await interaction.response.send_message(f"**Carte(s) modifiée(s) ·** Vous avez joué {' '.join((f'`{value}`' for value in self.values))}.\n\n✱ **`{bc_demo}`**", ephemeral=True, delete_after=20)
+            await interaction.response.send_message(f"**Carte(s) modifiée(s) ·** Vous avez joué {' '.join((f'`{value}`' for value in self.values))}.\n\n✱ **{bc_demo}**", ephemeral=True, delete_after=20)
         else:
-            await interaction.response.send_message(f"**Carte(s) jouée(s) ·** Vous avez joué {' '.join((f'`{value}`' for value in self.values))}.\n\n✱ **`{bc_demo}`**", ephemeral=True, delete_after=20)
+            await interaction.response.send_message(f"**Carte(s) jouée(s) ·** Vous avez joué {' '.join((f'`{value}`' for value in self.values))}.\n\n✱ **{bc_demo}**", ephemeral=True, delete_after=20)
         
 # Vote pour la meilleure carte
 class VoteBestCardsSelect(discord.ui.Select):
@@ -247,9 +247,9 @@ class VoteBestCardsSelect(discord.ui.Select):
             self.game.white_cards_human[c] = self.game.white_cards_human.get(c, 0) + 1
             
         if edited:
-            await interaction.response.send_message(f"**Vote modifié ·** Vous avez voté pour {' '.join(f'`{c}`' for c in cards)}.", ephemeral=True, delete_after=20)
+            await interaction.response.send_message(f"**Vote modifié ·** Vous avez voté pour {' | '.join(f'`{c}`' for c in cards)}.", ephemeral=True, delete_after=20)
         else:
-            await interaction.response.send_message(f"**Vote enregistré ·** Vous avez voté pour {' '.join(f'`{c}`' for c in cards)}.", ephemeral=True, delete_after=20)
+            await interaction.response.send_message(f"**Vote enregistré ·** Vous avez voté pour {' | '.join(f'`{c}`' for c in cards)}.", ephemeral=True, delete_after=20)
 
 # Boutons d'export des cartes noires complétées
 class ExportBlackCardsView(discord.ui.View):
@@ -428,10 +428,12 @@ class BlackCard:
     def __hash__(self) -> int:
         return hash(self.text)
     
-    def fill(self, cards: List[str]) -> str:
+    def fill(self, cards: List[str], with_codeblock: bool = False) -> str:
         if len(cards) != self.blanks:
             raise ValueError(f'Expected {self.blanks} cards, got {len(cards)}')
-        return self.text.replace('_', '{}').format(*cards).capitalize()
+        if not with_codeblock:
+            return self.text.replace('_', '{}').format(*cards)
+        return self.text.replace('_', '`{}`').format(*cards)
     
     def wrap_blanks(self) -> str:
         return self.text.replace('_', "`________`")
@@ -731,7 +733,7 @@ class ClassicGame:
                 player.score += VOTED_POINTS
         
         em = discord.Embed(title=f"**Round {self.round} ·** Résultats", color=discord.Color.blurple())
-        winners_txt = "\n".join([f"**{player}** · {self.round_black_card.fill(self.round_white_cards[str(player.id)])}" for player in winners])
+        winners_txt = "\n".join([f"**{player}** · {self.round_black_card.fill(self.round_white_cards[str(player.id)], with_codeblock=True)}" for player in winners])
         em.add_field(name=f"Gagnant(s) ({max(votes.values())} votes)", value=winners_txt)
         em.add_field(name="Scores", value="\n".join([f"• **{player}** · {player.score} points" for player in self.players]), inline=False)
         em.set_footer(text=f"Les gagnants ont reçu 3 points et ceux ayant eu au moins un vote ont reçu 1 point.")
