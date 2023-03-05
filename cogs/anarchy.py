@@ -924,6 +924,42 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         img = self.__add_corners(img, 30)
         return img
     
+    def _generate_gold_card(self, text: str, horizontal: bool = True):
+        imgdim = (750, 500) if horizontal else (500, 750)
+        img = Image.open('cogs/packages/anarchy/assets/gold_texture.jpg', 'r').convert('RGBA')
+        img = img.resize((imgdim[0], imgdim[1]))
+        d = ImageDraw.Draw(img)
+        font = ImageFont.truetype(f'cogs/packages/anarchy/assets/Coolvetica.otf', 40, encoding='unic')
+        wrapped = textwrap.wrap(text, width=39 if horizontal else 24)
+        x, y = (34, 30)
+        
+        shadowcolor = (212, 169, 108)
+        text = '\n'.join(wrapped)
+        d.text((x-1, y-1), text, font=font, fill=shadowcolor)
+        d.text((x+1, y-1), text, font=font, fill=shadowcolor)
+        d.text((x-1, y+1), text, font=font, fill=shadowcolor)
+        d.text((x+1, y+1), text, font=font, fill=shadowcolor)
+        
+        d.text((x, y), text, font=font, fill=(38, 31, 20))
+
+        logo_font = ImageFont.truetype(f'cogs/packages/anarchy/assets/Coolvetica.otf', 30, encoding='unic')
+        
+        x, y = (imgdim[0] - 60, imgdim[1] - 70)
+        d.text((x-1, y-1), '*', font=font, fill=shadowcolor)
+        d.text((x+1, y-1), '*', font=font, fill=shadowcolor)
+        d.text((x-1, y+1), '*', font=font, fill=shadowcolor)
+        d.text((x+1, y+1), '*', font=font, fill=shadowcolor)
+        d.text((x, y), '*', font=font, fill=(38, 31, 20))
+        
+        x, y = (imgdim[0] - 165, imgdim[1] - 70)
+        d.text((x-1, y-1), 'Anarchy', font=logo_font, fill=shadowcolor)
+        d.text((x+1, y-1), 'Anarchy', font=logo_font, fill=shadowcolor)
+        d.text((x-1, y+1), 'Anarchy', font=logo_font, fill=shadowcolor)
+        d.text((x+1, y+1), 'Anarchy', font=logo_font, fill=shadowcolor)
+        d.text((x, y), 'Anarchy', font=logo_font, fill=(38, 31, 20))
+        
+        img = self.__add_corners(img, 30)
+        return img
     
     # Commandes ================================================================
             
@@ -987,6 +1023,11 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         :param color: Couleur de la carte (noire/blanche)
         :param vertical: Si la carte doit être affichée verticalement
         """
+        premium_role = None
+        if isinstance(interaction.guild, discord.Guild):
+            if interaction.guild.premium_subscription_count:
+                premium_role = interaction.guild.premium_subscriber_role
+    
         if color not in ['black', 'white']:
             return await interaction.response.send_message("**Erreur ·** La couleur de la carte doit être `black` ou `white`", ephemeral=True)
         if '_' in text:
@@ -996,8 +1037,15 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         if color == 'black':
             bc = BlackCard(text)
             image = bc._generate_image(text, not vertical)
-        else:
+        elif color == 'white':
             image = self._generate_white_card(text, not vertical)
+        else:
+            if not premium_role:
+                return await interaction.response.send_message("**Erreur ·** Cette commande n'est pas disponible sur ce serveur", ephemeral=True)
+            elif premium_role not in interaction.user.roles:
+                return await interaction.response.send_message(f"**Erreur ·** Cette commande n'est disponible qu'aux membres possédant **@{premium_role.name}**", ephemeral=True)
+            image = self._generate_gold_card(text, not vertical)
+        
         with BytesIO() as f:
             image.save(f, format='PNG')
             f.seek(0)
@@ -1005,7 +1053,14 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
             
     @custom_game_card.autocomplete('color')
     async def autocomplete_callback(self, interaction: discord.Interaction, current: str):
-        return [app_commands.Choice(name='black', value='black'), app_commands.Choice(name='white', value='white')]
+        if isinstance(interaction.guild, discord.Guild) and interaction.guild.premium_subscription_count > 0:
+            premium_role = interaction.guild.premium_subscriber_role
+        else:
+            premium_role = None
+        choices = [app_commands.Choice(name='Noire', value='black'), app_commands.Choice(name='Blanche', value='white')]
+        if premium_role:
+            choices.append(app_commands.Choice(name='Dorée', value='golden'))
+        return choices
             
             
 async def setup(bot: commands.Bot):
