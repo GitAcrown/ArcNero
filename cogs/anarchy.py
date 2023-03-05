@@ -1020,7 +1020,7 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         """Créer une carte noire/blanche personnalisée
 
         :param text: Texte de la carte
-        :param color: Couleur de la carte (noire/blanche)
+        :param color: Couleur de la carte (noire/blanche/dorée)
         :param vertical: Si la carte doit être affichée verticalement
         """
         premium_role = None
