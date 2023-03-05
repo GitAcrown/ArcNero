@@ -1028,7 +1028,7 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
             if interaction.guild.premium_subscription_count:
                 premium_role = interaction.guild.premium_subscriber_role
     
-        if color not in ['black', 'white']:
+        if color not in ['black', 'white', 'golden']:
             return await interaction.response.send_message("**Erreur ·** La couleur de la carte doit être `black` ou `white`", ephemeral=True)
         if '_' in text:
             text = text.replace('_', '________', 3)
@@ -1040,10 +1040,11 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         elif color == 'white':
             image = self._generate_white_card(text, not vertical)
         else:
-            if not premium_role:
-                return await interaction.response.send_message("**Erreur ·** Cette commande n'est pas disponible sur ce serveur", ephemeral=True)
-            elif premium_role not in interaction.user.roles:
-                return await interaction.response.send_message(f"**Erreur ·** Cette commande n'est disponible qu'aux membres possédant **@{premium_role.name}**", ephemeral=True)
+            if not isinstance(interaction.channel, discord.DMChannel):
+                if not premium_role:
+                    return await interaction.response.send_message("**Erreur ·** Cette commande n'est pas disponible sur ce serveur", ephemeral=True)
+                elif premium_role not in interaction.user.roles:
+                    return await interaction.response.send_message(f"**Erreur ·** Cette commande n'est disponible qu'aux membres possédant **@{premium_role.name}**", ephemeral=True)
             image = self._generate_gold_card(text, not vertical)
         
         with BytesIO() as f:
@@ -1058,7 +1059,7 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
         else:
             premium_role = None
         choices = [app_commands.Choice(name='Noire', value='black'), app_commands.Choice(name='Blanche', value='white')]
-        if premium_role:
+        if premium_role or isinstance(interaction.channel, discord.DMChannel) :
             choices.append(app_commands.Choice(name='Dorée', value='golden'))
         return choices
             
