@@ -1051,7 +1051,7 @@ class Anarchy(commands.GroupCog, name="anarchy", description="Jeu inspiré de Ca
             image.save(f, format='PNG')
             f.seek(0)
             if color == 'golden' and premium_role and not isinstance(interaction.channel, discord.DMChannel):
-                return await interaction.response.send_message(file=discord.File(f, 'card.png', description=text), content=f"*Non disponible en jeu, uniquement pour les membres @{premium_role.name}*")
+                return await interaction.response.send_message(file=discord.File(f, 'card.png', description=text), content=f"*Non disponible en jeu, uniquement pour les membres **@{premium_role.name}***")
             await interaction.response.send_message(file=discord.File(f, 'card.png', description=text))
             
     @custom_game_card.autocomplete('color')
